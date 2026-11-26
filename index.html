@@ -411,14 +411,14 @@
             <strong data-en="Note">注意</strong>
             <ul data-l="zh">
               <li>更新時不要拔線、不要關掉這個網頁；先關掉 ap_web、dfu_gui 等同時連著裝置的工具。</li>
-              <li>網頁依裝置的產品名稱（GM851 Mouse、Ex02 Mouse、GM855 Mouse、F03 Mouse 和各自的 Dongle）只給同一機種的韌體。Ex02 在 0.95 以前、GM855GT 在 0.8 以前的韌體還叫「GM851」，這些板子第一次換到新名稱要用 SWD 或 <code>dfu_hid_update.py … --any-model</code>。</li>
+              <li>網頁依裝置的產品名稱（GM851 Mouse、Ex02 Mouse、GM855 Mouse、F03 Mouse、K+M Mouse 和各自的 Dongle）只給同一機種的韌體。Ex02 在 0.95 以前、GM855GT 在 0.8 以前、K+M（8M1K）在 0.99 以前的韌體還叫「GM851」，這些板子第一次換到新名稱要用 SWD 或 <code>dfu_hid_update.py … --any-model</code>。</li>
               <li>線上韌體放在這個網頁旁邊的 <code>firmware/</code>（清單 <code>manifest.json</code>，用 <code>tools/make_dfu_site.py</code> 產生）；直接開本機的 .html 讀不到，只能改用電腦裡的檔案。</li>
               <li>滑鼠更新完會自動確認新版本；新版開不了機時，下次重開會自動退回舊版。</li>
               <li>dongle 沒有「退回上一版」，也不回報映像大小，只檢查版本號。</li>
             </ul>
             <ul data-l="en">
               <li>Do not unplug the cable or close this page during an update; first close ap_web, dfu_gui and any other tool connected to the device.</li>
-              <li>The page only offers firmware of the same model, by the device's product name (GM851 Mouse, Ex02 Mouse, GM855 Mouse, F03 Mouse and their dongles). Ex02 before 0.95 and GM855GT before 0.8 still call themselves “GM851”; the first update of those boards to the new name needs SWD or <code>dfu_hid_update.py … --any-model</code>.</li>
+              <li>The page only offers firmware of the same model, by the device's product name (GM851 Mouse, Ex02 Mouse, GM855 Mouse, F03 Mouse, K+M Mouse and their dongles). Ex02 before 0.95, GM855GT before 0.8 and K+M (8M1K) before 0.99 still call themselves “GM851”; the first update of those boards to the new name needs SWD or <code>dfu_hid_update.py … --any-model</code>.</li>
               <li>Online firmware sits next to this page in <code>firmware/</code> (list <code>manifest.json</code>, made by <code>tools/make_dfu_site.py</code>); a page opened as a local .html file cannot read it, so use a file on this PC.</li>
               <li>The mouse confirms the new version by itself after an update; if the new one cannot boot, the next restart goes back to the old one.</li>
               <li>The dongle has no “Roll back” and does not report its image size; only the version number is checked.</li>
@@ -570,12 +570,12 @@ const VID = 0x1915, PID_MOUSE = 0x700F, PID_DONGLE = 0x7010, PAGE = 0xFF0A;
 const REPORT = 64, DATA = 60, TIMEOUT_MS = 3000, RETRIES = 3;
 const MCUBOOT_MAGIC = 0x96F3B83D;
 // The USB product strings images carry (dfu_hid_update.py TAGS), one per model (user
-// 2026-11-25: Ex02 "Ex02 Mouse" from GM851GT 0.95, GM855GT its own from 0.8). A build may
+// 2026-11-25: Ex02 "Ex02 Mouse" from GM851GT 0.95, GM855GT its own from 0.8; 8M1K "K+M ..." from 0.99). A build may
 // add a suffix to the device's ("... QT"), so the device's name is matched by its start;
 // none of these may start or contain another. A device with none of them is not updated.
 const TAGS = {
-  mouse: ['F03 Mouse', 'GM851 Mouse', 'GM855 Mouse', 'Ex02 Mouse'],
-  dongle: ['F03 Dongle', 'GM851 Dongle', 'GM855 Dongle'],
+  mouse: ['F03 Mouse', 'GM851 Mouse', 'GM855 Mouse', 'Ex02 Mouse', 'K+M Mouse'],
+  dongle: ['F03 Dongle', 'GM851 Dongle', 'GM855 Dongle', 'K+M Dongle'],
 };
 
 const $ = id => document.getElementById(id);
