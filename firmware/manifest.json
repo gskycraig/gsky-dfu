@@ -31,6 +31,22 @@
       "bytes": 127160,
       "sha256": "66b99c1e5c09976c3768183d6b21dedd06c1e4929e988775435ecaedeea653be",
       "date": "2026-11-26"
+    },
+    {
+      "product": "K+M Dongle",
+      "version": "0.99.0+0",
+      "file": "K+M_Dongle_v0.99.0_0.bin",
+      "bytes": 131720,
+      "sha256": "5c49cb515e0ac98d3f2a7a6b93b821c239f3b8eac1b2af628738834fc751fedd",
+      "date": "2026-11-26"
+    },
+    {
+      "product": "K+M Mouse",
+      "version": "0.99.0+0",
+      "file": "K+M_Mouse_v0.99.0_0.bin",
+      "bytes": 332168,
+      "sha256": "10dfb9f8969c305aac40c059f11c5d5176aa9a5d5353ea95d2cb915ee51456cd",
+      "date": "2026-11-26"
     }
   ]
 }
