@@ -20,13 +20,18 @@
     AD FF 01/02/03 MP mode on / off / reset, AD 02 LED, AD 04 key (from the mouse),
     AD 01 RF test (wired only), AD 03 MAC / product info, AD 05 pairing, AD FE 01/FF reset,
     1A F2 the dongle's own lamps.
-  Style after begin0808.github.io/esp32Lab ("mat" / "blocks"); "neon" / "metal" are dark ones.
+  AP settings - the rest of ap_web.html (8A status / versions, 88 battery, 01 profile,
+    84/04 sensor and system blocks, 83/03 keys, 85/05 macros, AC save, AB reset, raw);
+    block layouts ptx/src/vendor/mouse_profile.h. Through the dongle they reach the mouse.
+  Style after begin0808.github.io/esp32Lab ("mat" / "blocks"); "neon" / "metal" are dark ones;
+  "glass" (dark, glassmorphism) / "minimal" (light): Inter, accent #3B82F6, bento cards and icons
+  (user 2026-11-26). Icons: Lucide 0.460.0 (https://lucide.dev, ISC license), inlined as SVG.
   The style and the language (zh / en) are picked in the settings popover (top right), kept in
   localStorage; no saved language = the browser's (zh*, else en).
 -->
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Huninn&family=Noto+Sans+TC:wght@400;600;700;900&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Huninn&family=Inter:wght@400;500;600;700;800&family=Noto+Sans+TC:wght@400;600;700;900&display=swap" rel="stylesheet">
 <style>
   :root {
     color-scheme: light;
@@ -110,7 +115,7 @@
   :root:is([data-style=neon], [data-style=metal]) .tab { color: #a9b6c2; }
   :root:is([data-style=neon], [data-style=metal]) .tab:hover { background: #ffffff14; }
   :root:is([data-style=neon], [data-style=metal]) .tab[aria-selected=true] { color: #06141e; }
-  :root:is([data-style=neon], [data-style=metal]) :is(select, input[type=text], input[type=number]) { background: #08131f; border-color: #22d3ff55; border-radius: 0; }
+  :root:is([data-style=neon], [data-style=metal]) :is(select, input[type=text], input[type=number], textarea) { background: #08131f; border-color: #22d3ff55; border-radius: 0; }
   :root:is([data-style=neon], [data-style=metal]) .key-led.down::before { background: #39ff88; box-shadow: 0 0 10px #39ff88; }
   :root:is([data-style=neon], [data-style=metal]) .big { text-shadow: 0 0 10px #4dffa066; }
   /* metal: the lines are brushed metal instead of neon */
@@ -124,7 +129,7 @@
   :root[data-style=metal] .btn.primary { border: 0; box-shadow: 0 0 12px #39ff8873, inset 0 1px 0 #ffffffb3; }
   :root[data-style=metal] .btn.danger { border-image: linear-gradient(135deg, #6b3440, #ffd0d9 20%, #a35565 40%, #3a1820 55%, #ffb3c1 75%, #7a3a48) 1; }
   :root[data-style=metal] .tab[aria-selected=true] { border: 0; }
-  :root[data-style=metal] :is(select, input[type=text], input[type=number]) { border: 1px solid; border-image: var(--metal) 1; }
+  :root[data-style=metal] :is(select, input[type=text], input[type=number], textarea) { border: 1px solid; border-image: var(--metal) 1; }
   :root[data-style=metal] .progress progress { accent-color: #c8d2db; }
 
   * { box-sizing: border-box; }
@@ -173,7 +178,7 @@
   .settings-head { display: flex; justify-content: space-between; align-items: center; font-family: var(--font-display); font-size: 16px; }
   .set-group { margin: 10px 0 0; padding: 0; border: 0; min-width: 0; }
   .set-group legend { padding: 0; margin-bottom: 6px; color: var(--muted); font-size: 11px; letter-spacing: 2px; }
-  .themes { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+  .themes { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
   .theme { display: grid; gap: 4px; justify-items: center; font-size: 12px; color: var(--muted); cursor: pointer; }
   .theme input, .seg input { position: absolute; opacity: 0; pointer-events: none; }
   .pv { width: 100%; height: 48px; display: flex; flex-direction: column; gap: 4px; padding: 7px; border: 2px solid var(--border); border-radius: 4px; }
@@ -196,7 +201,7 @@
   /* English: a Latin font first (a CJK font draws "" and '' full width) */
   :root[data-lang=en] { --font-system: "Segoe UI", system-ui, "Noto Sans TC", "Microsoft JhengHei", sans-serif; }
   :root[data-lang=en][data-style=blocks] { --font-ui: var(--font-system); --font-display: var(--font-system); }
-  select, input[type=text], input[type=number] {
+  select, input[type=text], input[type=number], textarea {
     padding: 5px 6px; border: 1px solid var(--border); border-radius: 4px; background: #fff; color: var(--text); font: inherit;
   }
   input.mono { font-family: var(--font-code); }
@@ -296,11 +301,158 @@
 
   .footer { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 6px 24px; padding: 4px 16px 8px; color: var(--page-muted); font-size: 11px; }
 
+  /* AP settings: wider work panel, tables, the key editor */
+  .workspace.wide { grid-template-columns: minmax(0, 1fr) minmax(280px, 30%); }
+  #page-ap .row label { display: inline-flex; align-items: center; gap: 4px; }
+  .table-wrap { overflow-x: auto; }
+  .ap-table { border-collapse: collapse; width: 100%; font-size: 12px; }
+  .ap-table th, .ap-table td { text-align: left; padding: 3px 6px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+  .ap-table th { color: var(--muted); font-weight: 600; }
+  .ap-table input[type=number] { width: 6.5em; }
+  .ap-table tr.sel td { background: var(--success-bg); }
+  .ap-table td.desc { color: var(--muted); }
+  input.hex { width: 3.2em; font-family: var(--font-code); text-transform: uppercase; text-align: center; }
+  input[type=number].narrow { width: 5.5em; }
+  input[type=color] { width: 40px; height: 26px; padding: 0 2px; border: 1px solid var(--border); background: transparent; }
+  textarea { width: 100%; font-family: var(--font-code); font-size: 12px; }
+  .keys-grid { display: grid; gap: 12px; grid-template-columns: minmax(0, 1.5fr) minmax(240px, 1fr); align-items: start; }
+  .key-editor { border: 1px solid var(--border); padding: 8px 10px; display: grid; gap: 6px; }
+  .key-editor .checks { display: inline-flex; flex-wrap: wrap; gap: 4px 12px; }
+  .log-opt { display: inline-flex; align-items: center; gap: 4px; font-weight: 400; font-size: 12px; }
+  @media (max-width: 1200px) { .keys-grid { grid-template-columns: minmax(0, 1fr); } }
+
   @media (max-width: 900px), (max-height: 640px) {
     html, body { height: auto; }
-    .workspace { grid-template-columns: minmax(0, 1fr); gap: 12px; }
+    .workspace, .workspace.wide { grid-template-columns: minmax(0, 1fr); gap: 12px; }
     .monitor { flex: none; height: 300px; }
   }
+  /* ── "glass" (dark tech) and "minimal" (light): Inter + Noto Sans TC, accent #3B82F6, bento ── */
+  :root[data-style=glass], :root[data-style=minimal] {
+    --font-ui: "Inter", "Noto Sans TC", "Microsoft JhengHei", system-ui, sans-serif; --font-display: var(--font-ui);
+    --go-bg: linear-gradient(180deg, #4F8EF7, #2563EB); --go-text: #fff; --bar: #3B82F6; --focus: #3B82F6;
+  }
+  :root[data-style=glass] {
+    color-scheme: dark;
+    --surface: rgba(24, 24, 27, .62); --card: rgba(255, 255, 255, .025); --text: #FAFAFA; --muted: #A1A1AA; --border: rgba(255, 255, 255, .08);
+    --danger: #F87171; --danger-bg: rgba(248, 113, 113, .10); --success: #34D399; --success-bg: rgba(52, 211, 153, .08);
+    --warn-bg: rgba(250, 204, 21, .07); --warn-text: #FDE68A; --busy: #FBBF24; --link: #60A5FA;
+    --page-bg: #09090B;
+    --page-pattern: radial-gradient(900px 520px at 8% -12%, rgba(59, 130, 246, .24), transparent 62%),
+                    radial-gradient(760px 460px at 102% 112%, rgba(139, 92, 246, .14), transparent 60%),
+                    radial-gradient(rgba(255, 255, 255, .055) 1px, transparent 1px);
+    --page-pattern-size: auto, auto, 22px 22px;
+    --page-title: #FAFAFA; --page-text: #E4E4E7; --page-muted: #A1A1AA; --page-link: #60A5FA;
+    --status-idle: #52525B; --status-ready: #34D399;
+    --btn-bg: rgba(255, 255, 255, .05); --btn-text: #E4E4E7; --btn-border: 1px solid rgba(255, 255, 255, .10); --btn-radius: 10px; --btn-shadow: none;
+    --panel-border: 1px solid rgba(255, 255, 255, .08); --panel-radius: 20px; --panel-shadow: 0 30px 60px -30px rgba(0, 0, 0, .9);
+    --head-bg: transparent; --head-alt-bg: transparent; --head-text: #FAFAFA; --head-border: 1px solid rgba(255, 255, 255, .06);
+    --tab-on-bg: rgba(59, 130, 246, .16); --tab-on-border: 1px solid rgba(59, 130, 246, .45); --tab-on-shadow: 0 0 18px -6px rgba(59, 130, 246, .8);
+    --monitor-bg: rgba(9, 9, 11, .55); --monitor-text: #D4D4D8; --monitor-system: #60A5FA; --monitor-ok: #34D399; --monitor-err: #F87171;
+    --icon-bg: rgba(59, 130, 246, .14); --icon-fg: #60A5FA; --glow: rgba(59, 130, 246, .45);
+  }
+  :root[data-style=minimal] {
+    color-scheme: light;
+    --surface: #FFFFFF; --card: #FBFBFD; --text: #1D1D1F; --muted: #6E6E73; --border: #E8E8ED;
+    --danger: #DC2626; --danger-bg: #FEF2F2; --success: #15803D; --success-bg: #F0FDF4;
+    --warn-bg: #FFFBEB; --warn-text: #92400E; --busy: #F59E0B; --link: #2563EB;
+    --page-bg: #F5F5F7; --page-pattern: none; --page-pattern-size: auto;
+    --page-title: #1D1D1F; --page-text: #1D1D1F; --page-muted: #6E6E73; --page-link: #2563EB;
+    --status-idle: #C7C7CC; --status-ready: #34C759;
+    --btn-bg: #FFFFFF; --btn-text: #1D1D1F; --btn-border: 1px solid #D2D2D7; --btn-radius: 980px; --btn-shadow: none;
+    --panel-border: 1px solid rgba(0, 0, 0, .05); --panel-radius: 24px; --panel-shadow: 0 1px 2px rgba(0, 0, 0, .04), 0 16px 40px -20px rgba(0, 0, 0, .14);
+    --head-bg: transparent; --head-alt-bg: transparent; --head-text: #1D1D1F; --head-border: 1px solid #F0F0F3;
+    --tab-on-bg: #FFFFFF; --tab-on-border: 0 solid transparent; --tab-on-shadow: 0 1px 3px rgba(0, 0, 0, .12), 0 0 0 .5px rgba(0, 0, 0, .05);
+    --monitor-bg: #FBFBFD; --monitor-text: #1D1D1F; --monitor-system: #2563EB; --monitor-ok: #15803D; --monitor-err: #DC2626;
+    --icon-bg: #EFF6FF; --icon-fg: #3B82F6; --glow: rgba(59, 130, 246, .22);
+  }
+  .ico { display: none; }
+  :root:is([data-style=glass], [data-style=minimal]) {
+    & body { font-size: 13.5px; -webkit-font-smoothing: antialiased; }
+    & .ico { display: inline-block; width: 16px; height: 16px; flex: none; }
+    & .topbar { position: sticky; top: 0; z-index: 30; padding: 10px 20px; margin-bottom: 8px; border-bottom: 1px solid var(--border); backdrop-filter: blur(16px) saturate(160%); }
+    & .brand h1 { font-weight: 800; letter-spacing: -.025em; font-size: 21px; }
+    & .edition { border-radius: 999px; padding: 1px 10px; font-size: 12px; font-weight: 600; }
+    & .version { border-radius: 999px; font-weight: 500; }
+    & .workspace { padding: 6px 20px 10px; gap: 20px; }
+    & .btn { display: inline-flex; align-items: center; gap: 6px; font-weight: 500; transition: all .3s ease; }
+    & .btn:hover:not(:disabled) { filter: none; transform: translateY(-1px); border-color: rgba(59, 130, 246, .55); box-shadow: 0 6px 20px -8px var(--glow); }
+    & .btn.primary { border: 0; font-weight: 600; box-shadow: 0 8px 22px -10px rgba(59, 130, 246, .9), inset 0 1px 0 rgba(255, 255, 255, .25); }
+    & .btn.primary:hover:not(:disabled) { box-shadow: 0 10px 28px -8px rgba(59, 130, 246, .95), inset 0 1px 0 rgba(255, 255, 255, .25); }
+    & .panel-body .btn, & .panel-body .btn.primary { box-shadow: none; }
+    & .panel-body .btn.primary { box-shadow: 0 8px 22px -12px rgba(59, 130, 246, .9); }
+    & .panel { transition: border-color .3s; }
+    & .panel-head { padding: 12px 14px; }
+    & .tabs { padding: 4px; gap: 2px; border-radius: 12px; }
+    & .tab { display: inline-flex; align-items: center; gap: 6px; padding: 6px 14px; border-radius: 9px; font-weight: 600; transition: all .3s; }
+    & .panel-body { container-type: inline-size; }
+    & .big { font-size: 24px; letter-spacing: -.02em; }
+    & .sec h3 { font-size: 14.5px; font-weight: 700; letter-spacing: -.01em; }
+    & .sec h3 > .ico { width: 30px; height: 30px; padding: 7px; border-radius: 9px; background: var(--icon-bg); color: var(--icon-fg); }
+    & .panel-head > span > .ico, & .panel-head > .ico { color: var(--icon-fg); }
+    & :is(select, input[type=text], input[type=number], textarea) { border-radius: 9px; transition: border-color .2s, box-shadow .2s; }
+    & :is(select, input[type=text], input[type=number], textarea):focus { outline: none; border-color: #3B82F6; box-shadow: 0 0 0 3px rgba(59, 130, 246, .25); }
+    & .monitor { font-size: 12.5px; }
+    /* bento: the device card on top, then tiles */
+    & #devCard { margin: 12px 12px 0; border: 1px solid var(--border); border-radius: 16px;
+      background: linear-gradient(135deg, rgba(59, 130, 246, .16), rgba(59, 130, 246, .02) 55%), var(--card); }
+    & #devCard.bad { background: var(--danger-bg); }
+    & :is(#page-dfu, #page-mp, #page-ap):not([hidden]) { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; padding: 12px; }
+    & :is(#page-dfu > *, .sec) { margin: 0; border: 1px solid var(--border); border-radius: 16px; background: var(--card); transition: all .3s ease; }
+    & :is(#page-dfu > *, .sec):hover { transform: translateY(-2px); border-color: rgba(59, 130, 246, .38); box-shadow: 0 0 0 1px rgba(59, 130, 246, .12), 0 16px 36px -20px var(--glow); }
+    & :is(#imgCard, #secRf, .sec:has(#piGet), .sec:has(#apDpi), .sec:has(#apSleep), .sec:has(#apKeyTable), .sec:has(#apMacTable), .sec:has(#rawHex)) { grid-column: 1 / -1; }
+    & .steps { padding: 14px 14px 14px 34px; }
+    & .tips { padding: 12px 14px; background: var(--warn-bg); }
+    & .sec { padding: 14px; gap: 10px; align-content: start; }
+    & .btn[hidden] { display: none; }
+    & .sec[aria-disabled=true] { opacity: .55; }
+    & .seg { border-radius: 10px; overflow: hidden; }
+  }
+  @container (max-width: 620px) {
+    :root:is([data-style=glass], [data-style=minimal]) :is(#page-dfu, #page-mp, #page-ap):not([hidden]) { grid-template-columns: minmax(0, 1fr); }
+  }
+  :root[data-style=glass] {
+    & .topbar { background: rgba(9, 9, 11, .55); }
+    & .panel, & .settings, & .dialog { backdrop-filter: blur(20px) saturate(150%); }
+    & .settings, & .dialog { background: rgba(24, 24, 27, .92); }
+    & .panel:hover { border-color: rgba(255, 255, 255, .12); }
+    & .brand svg rect { fill: #18181B; stroke: #3B82F6; }
+    & .brand svg g { stroke: #3B82F6; opacity: .55; }
+    & .brand svg > path { stroke: #93C5FD; }
+    & .brand h1 { background: linear-gradient(90deg, #FAFAFA, #93C5FD); -webkit-background-clip: text; background-clip: text; color: transparent; }
+    & .edition { background: rgba(59, 130, 246, .14); border: 1px solid rgba(59, 130, 246, .4); color: #93C5FD; }
+    & .version { color: #A1A1AA; border-color: rgba(255, 255, 255, .15); }
+    & .tabs { background: rgba(255, 255, 255, .04); border: 1px solid rgba(255, 255, 255, .06); }
+    & .tab { color: #A1A1AA; }
+    & .tab:hover { background: rgba(255, 255, 255, .05); color: #E4E4E7; }
+    & .tab[aria-selected=true] { color: #BFDBFE; }
+    & .btn.danger { background: rgba(248, 113, 113, .10); color: #FCA5A5; border: 1px solid rgba(248, 113, 113, .35); }
+    & :is(select, input[type=text], input[type=number], textarea) { background: rgba(9, 9, 11, .55); border-color: rgba(255, 255, 255, .10); color: #FAFAFA; }
+    & .big { color: #FAFAFA; }
+    & .card.ok .big, & .versions .big { color: #FAFAFA; text-shadow: 0 0 18px rgba(59, 130, 246, .55); }
+    & .key-led.down::before { background: #34D399; box-shadow: 0 0 10px #34D399; }
+  }
+  :root[data-style=minimal] {
+    & .topbar { background: rgba(245, 245, 247, .78); }
+    & .brand svg rect { fill: #fff; stroke: #1D1D1F; }
+    & .brand svg g { stroke: #1D1D1F; }
+    & .brand svg > path { stroke: #3B82F6; }
+    & .edition { background: #EFF6FF; border: 0; color: #2563EB; }
+    & .version { color: #6E6E73; border-color: #D2D2D7; }
+    & .tabs { background: #EDEDF0; }
+    & .tab { color: #6E6E73; }
+    & .tab:hover { color: #1D1D1F; background: rgba(255, 255, 255, .5); }
+    & .tab[aria-selected=true] { color: #1D1D1F; }
+    & .btn.danger { background: #fff; color: #DC2626; border: 1px solid #FCA5A5; }
+    & .card.ok .big { color: #1D1D1F; }
+    & #devCard { background: linear-gradient(135deg, #EFF6FF, #FFFFFF 60%); }
+    & .monitor { border-top: 1px solid var(--border); }
+  }
+  .pv-glass { background: radial-gradient(60px 40px at 0 0, #3B82F655, transparent), #09090B; }
+  .pv-glass i { background: rgba(255, 255, 255, .14); border: 1px solid rgba(255, 255, 255, .18); border-radius: 3px; }
+  .pv-glass i:nth-child(1) { background: #3B82F6; box-shadow: 0 0 8px #3B82F6; border: 0; }
+  .pv-minimal { background: #F5F5F7; }
+  .pv-minimal i { background: #fff; border-radius: 4px; box-shadow: 0 1px 2px #0002; }
+  .pv-minimal i:nth-child(1) { background: #3B82F6; }
 </style>
 </head>
 <body>
@@ -314,7 +466,7 @@
         <path d="M20 27V13M14 19l6-6 6 6" fill="none" stroke="#e08e00" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
       </svg>
       <div>
-        <h1>GSKY DFU <span class="edition" data-en="Update · MP test">更新・產測</span> <span class="version" title="連線方式" data-en-title="Connection">WebHID</span></h1>
+        <h1>GSKY DFU <span class="edition" data-en="Update · Test · Settings">更新・產測・設定</span> <span class="version" title="連線方式" data-en-title="Connection">WebHID</span></h1>
         <p id="status" class="status" data-state="idle" role="status">尚未連接裝置</p>
       </div>
     </div>
@@ -334,6 +486,8 @@
           <label class="theme"><input type="radio" name="style" value="blocks"><span class="pv pv-blocks"><i></i><i></i><i></i></span><span data-en="Blocks">積木</span></label>
           <label class="theme"><input type="radio" name="style" value="neon"><span class="pv pv-neon"><i></i><i></i><i></i></span><span data-en="Neon">霓虹</span></label>
           <label class="theme"><input type="radio" name="style" value="metal"><span class="pv pv-metal"><i></i><i></i><i></i></span><span data-en="Metal">金屬</span></label>
+          <label class="theme"><input type="radio" name="style" value="glass"><span class="pv pv-glass"><i></i><i></i><i></i></span><span data-en="Glass">玻璃</span></label>
+          <label class="theme"><input type="radio" name="style" value="minimal"><span class="pv pv-minimal"><i></i><i></i><i></i></span><span data-en="Minimal">極簡</span></label>
         </div>
       </fieldset>
       <fieldset class="set-group">
@@ -361,8 +515,9 @@
     <section class="panel" aria-label="工作區" data-en-aria-label="Work area">
       <div class="panel-head">
         <div class="tabs" role="tablist">
-          <button class="tab" role="tab" id="tab-dfu" aria-controls="page-dfu" aria-selected="true" data-tab="dfu" data-en="Firmware update">韌體更新</button>
-          <button class="tab" role="tab" id="tab-mp" aria-controls="page-mp" aria-selected="false" data-tab="mp" data-en="MP test">產測</button>
+          <button class="tab" role="tab" id="tab-dfu" aria-controls="page-dfu" aria-selected="true" data-tab="dfu"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg><span data-en="Firmware update">韌體更新</span></button>
+          <button class="tab" role="tab" id="tab-mp" aria-controls="page-mp" aria-selected="false" data-tab="mp"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="8" height="4" x="8" y="2" rx="1" ry="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="m9 14 2 2 4-4"/></svg><span data-en="MP test">產測</span></button>
+          <button class="tab" role="tab" id="tab-ap" aria-controls="page-ap" aria-selected="false" data-tab="ap"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="21" x2="14" y1="4" y2="4"/><line x1="10" x2="3" y1="4" y2="4"/><line x1="21" x2="12" y1="12" y2="12"/><line x1="8" x2="3" y1="12" y2="12"/><line x1="21" x2="16" y1="20" y2="20"/><line x1="12" x2="3" y1="20" y2="20"/><line x1="14" x2="14" y1="2" y2="6"/><line x1="8" x2="8" y1="10" y2="14"/><line x1="16" x2="16" y1="18" y2="22"/></svg><span data-en="AP settings">AP 設定</span></button>
         </div>
         <span id="headInfo" class="sub"></span>
       </div>
@@ -372,7 +527,7 @@
           <div>
             <span class="label" data-en="Device">裝置</span>
             <div id="devBig" class="big">未連接</div>
-            <div id="devSub" class="sub">滑鼠請用 USB 線連接電腦（藍牙不能更新、不能產測）；dongle 直接插上。</div>
+            <div id="devSub" class="sub">滑鼠請用 USB 線連接電腦（藍牙不能更新、產測、設定）；dongle 直接插上。</div>
             <dl id="devKv" class="kv" hidden></dl>
           </div>
         </div>
@@ -429,7 +584,7 @@
         <!-- ── 產測 ─────────────────────────────────────────────────── -->
         <div id="page-mp" class="tab-page" role="tabpanel" aria-labelledby="tab-mp" hidden>
           <section class="sec">
-            <h3><span data-en="Test mode">測試模式</span> <span id="mpTag" class="tag">未進入</span></h3>
+            <h3><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 2v7.527a2 2 0 0 1-.211.896L4.72 20.55a1 1 0 0 0 .9 1.45h12.76a1 1 0 0 0 .9-1.45l-5.069-10.127A2 2 0 0 1 14 9.527V2"/><path d="M8.5 2h7"/><path d="M7 16h10"/></svg><span data-en="Test mode">測試模式</span> <span id="mpTag" class="tag">未進入</span></h3>
             <div class="row">
               <button class="btn primary" data-need="any" id="mpEnter" data-en="Enter MP test">進入 MP 測試</button>
               <button class="btn" data-need="any" id="mpExit" data-en="Exit MP test">離開 MP 測試</button>
@@ -439,7 +594,7 @@
           </section>
 
           <section class="sec">
-            <h3 data-en="Mouse LED">滑鼠燈號</h3>
+            <h3><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1 .2 2.2 1.5 3.5.7.7 1.3 1.5 1.5 2.5"/><path d="M9 18h6"/><path d="M10 22h4"/></svg><span data-en="Mouse LED">滑鼠燈號</span></h3>
             <div class="row">
               <button class="btn" data-need="any" data-led="255,0,0"><span class="swatch" style="background:#e53935"></span><span data-en="Red">紅</span></button>
               <button class="btn" data-need="any" data-led="0,255,0"><span class="swatch" style="background:#43a047"></span><span data-en="Green">綠</span></button>
@@ -450,7 +605,7 @@
           </section>
 
           <section class="sec" id="secDongleLamp">
-            <h3><span data-en="Dongle LED">Dongle 燈號</span> <span class="tag" data-en="Dongle only">只限連 dongle</span></h3>
+            <h3><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="10" cy="7" r="1"/><circle cx="4" cy="20" r="1"/><path d="M4.7 19.3 19 5"/><path d="m21 3-3 1 2 2Z"/><path d="M9.26 7.68 5 12l2 5"/><path d="m10 14 5 2 3.5-3.5"/><path d="m18 12 1-1 1 1-1 1Z"/></svg><span data-en="Dongle LED">Dongle 燈號</span> <span class="tag" data-en="Dongle only">只限連 dongle</span></h3>
             <div class="row">
               <label>1206RGB <select id="dlPr"></select></label>
               <label>020RGB <select id="dlChg"></select></label>
@@ -461,7 +616,7 @@
           </section>
 
           <section class="sec">
-            <h3 data-en="Key test">按鍵測試</h3>
+            <h3><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 4.1 12 6"/><path d="m5.1 8-2.9-.8"/><path d="m6 12-1.9 2"/><path d="M7.2 2.2 8 5.1"/><path d="M9.037 9.69a.498.498 0 0 1 .653-.653l11 4.5a.5.5 0 0 1-.074.949l-4.349 1.041a1 1 0 0 0-.74.739l-1.04 4.35a.5.5 0 0 1-.95.074z"/></svg><span data-en="Key test">按鍵測試</span></h3>
             <div class="row">
               <span id="keyLed" class="key-led">DPI 鍵：等待</span>
               <span id="keyCount" class="sub">按下 0 次</span>
@@ -471,7 +626,7 @@
           </section>
 
           <section class="sec" id="secRf">
-            <h3><span data-en="RF test">RF 測試</span> <span class="tag" data-en="Wired only">只限有線</span></h3>
+            <h3><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4.9 16.1C1 12.2 1 5.8 4.9 1.9"/><path d="M7.8 4.7a6.14 6.14 0 0 0-.8 7.5"/><circle cx="12" cy="9" r="2"/><path d="M16.2 4.8c2 2 2.26 5.11.8 7.47"/><path d="M19.1 1.9a9.96 9.96 0 0 1 0 14.1"/><path d="M9.5 18h5"/><path d="m8 22 4-11 4 11"/></svg><span data-en="RF test">RF 測試</span> <span class="tag" data-en="Wired only">只限有線</span></h3>
             <div class="grid-form">
               <label><span data-en="Mode">模式</span><select id="rfMode"><option value="100">2.4G 4 Mbps</option><option value="4">BLE 1M</option><option value="8">BLE 2M</option></select></label>
               <label><span data-en="Power (dBm)">功率（dBm）</span><select id="rfPow"><option>8</option><option>4</option><option>2</option><option>0</option></select></label>
@@ -492,7 +647,7 @@
           </section>
 
           <section class="sec">
-            <h3 data-en="Product info">產品資訊</h3>
+            <h3><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12.586 2.586A2 2 0 0 0 11.172 2H4a2 2 0 0 0-2 2v7.172a2 2 0 0 0 .586 1.414l8.704 8.704a2.426 2.426 0 0 0 3.42 0l6.58-6.58a2.426 2.426 0 0 0 0-3.42z"/><circle cx="7.5" cy="7.5" r=".5" fill="currentColor"/></svg><span data-en="Product info">產品資訊</span></h3>
             <div class="row">
               <button class="btn" data-need="any" id="piMac" data-en="Read MAC">讀 MAC</button>
               <button class="btn" data-need="any" id="piGet" data-en="Read product info">讀產品資訊</button>
@@ -511,7 +666,7 @@
           </section>
 
           <section class="sec">
-            <h3 data-en="Pairing code">配對碼</h3>
+            <h3><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg><span data-en="Pairing code">配對碼</span></h3>
             <div class="grid-form">
               <label><span data-en="Address (5 bytes)">位址（5 bytes）</span><input type="text" id="paAddr" class="mono" placeholder="例：3C 7A 91 2E 55" data-en-placeholder="e.g. 3C 7A 91 2E 55"></label>
               <label><span data-en="Key, first 4 bytes (shared ID)">Key 前 4 bytes（共用 ID）</span><input type="text" id="paKey" class="mono" placeholder="例：4B 19 C2 77" data-en-placeholder="e.g. 4B 19 C2 77"></label>
@@ -525,7 +680,7 @@
           </section>
 
           <section class="sec">
-            <h3 data-en="Reset">重設</h3>
+            <h3><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg><span data-en="Reset">重設</span></h3>
             <div class="row">
               <button class="btn" data-need="any" id="rsFactory" data-en="Factory reset (keeps pairing)">恢復出廠（保留配對）</button>
               <button class="btn danger" data-need="any" id="rsErase" data-en="Erase all">全部擦除</button>
@@ -533,13 +688,160 @@
             <p class="note" data-en="Erase all clears settings, macros, pairing and product info; the mouse reboots.">全部擦除會清掉設定、巨集、配對、產品資訊，滑鼠重開機。</p>
           </section>
         </div>
+
+        <!-- ── AP 設定（ap_web.html 的設定功能）─────────────────────── -->
+        <div id="page-ap" class="tab-page" role="tabpanel" aria-labelledby="tab-ap" hidden>
+          <section class="sec">
+            <h3><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 12h-2.48a2 2 0 0 0-1.93 1.46l-2.35 8.36a.25.25 0 0 1-.48 0L9.24 2.18a.25.25 0 0 0-.48 0l-2.35 8.36A2 2 0 0 1 4.49 12H2"/></svg><span data-en="Device status">裝置狀態</span> <span id="apVer" class="sub"></span></h3>
+            <div class="row">
+              <button class="btn primary" data-need="any" id="apReload" data-en="Read all">全部重讀</button>
+              <button class="btn" data-need="any" id="apStatus" data-en="Status 8A 01">狀態 8A 01</button>
+              <button class="btn" data-need="any" id="apFw" data-en="Version 8A 02">版本 8A 02</button>
+              <button class="btn" data-need="any" id="apRx" data-en="Receiver 8A 03 / 04">接收器 8A 03／04</button>
+              <button class="btn" data-need="any" id="apBatt" data-en="Battery 88">電量 88</button>
+            </div>
+            <dl id="apStatusKv" class="kv" hidden></dl>
+            <p class="note" data-en="Opening this tab reads the device. Through the dongle the commands go on to the mouse. Writes take effect at once but stay in flash only after “Save”; “Undo changes” goes back to the last save.">打開這一頁時自動讀取裝置。連 dongle 時指令轉給滑鼠。寫入後立即生效，但要按「存檔」才會寫進 flash；「取消修改」會還原成上次存檔的值。</p>
+          </section>
+
+          <section class="sec">
+            <h3><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15.2 3a2 2 0 0 1 1.4.6l3.8 3.8a2 2 0 0 1 .6 1.4V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"/><path d="M17 21v-7a1 1 0 0 0-1-1H8a1 1 0 0 0-1 1v7"/><path d="M7 3v4a1 1 0 0 0 1 1h7"/></svg><span data-en="Profile and save">Profile 與存檔</span></h3>
+            <div class="row">
+              <label><span data-en="Profile to edit">操作的 profile</span>
+                <select id="apProf"><option>0</option><option>1</option><option>2</option><option>3</option><option>4</option></select></label>
+              <button class="btn" data-need="any" id="apSetActive" data-en="Make it active 01">設為使用中 01</button>
+              <span id="apActive" class="sub"></span>
+            </div>
+            <div class="row">
+              <button class="btn primary" data-need="any" id="apSaveAll" data-en="Save AC FF">存檔 AC FF</button>
+              <button class="btn" data-need="any" id="apSaveProf" data-en="Save profile only AC F0">只存 profile AC F0</button>
+              <button class="btn" data-need="any" id="apCancel" data-en="Undo changes AC FE">取消修改 AC FE</button>
+            </div>
+            <div class="row">
+              <button class="btn" data-need="any" id="apResetProf" data-en="Reset this profile AB F0">重設此 profile AB F0</button>
+              <button class="btn" data-need="any" id="apResetKeys" data-en="Reset keys AB F1">重設按鍵 AB F1</button>
+              <button class="btn" data-need="any" id="apResetPerf" data-en="Reset performance AB F2">重設效能 AB F2</button>
+              <button class="btn danger" data-need="any" id="apFactory" data-en="Factory reset AB FF">恢復出廠 AB FF</button>
+              <button class="btn danger" data-need="any" id="apEraseAll" data-en="Erase all AB FE (incl. pairing)">全部擦除 AB FE（含配對）</button>
+            </div>
+          </section>
+
+          <section class="sec">
+            <h3><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><line x1="22" x2="18" y1="12" y2="12"/><line x1="6" x2="2" y1="12" y2="12"/><line x1="12" x2="12" y1="6" y2="2"/><line x1="12" x2="12" y1="22" y2="18"/></svg><span data-en="Sensor (04 / 84 xx 01)">Sensor 參數（04／84 xx 01）</span></h3>
+            <div class="row">
+              <button class="btn" data-need="any" id="apGetSen" data-en="Read">讀取</button>
+              <button class="btn primary" data-need="any" data-loaded="sen" id="apSetSen" data-en="Write">寫入</button>
+            </div>
+            <div class="row">
+              <label><span data-en="Current level">目前段</span> <select id="apLevel"></select></label>
+              <label><span data-en="Lift-off">抬起高度</span> <select id="apLod"><option value="7">0.7 mm</option><option value="10">1 mm</option><option value="20">2 mm</option></select></label>
+              <label><input type="checkbox" id="apSnap"> <span data-en="Angle snapping">直線修正</span></label>
+              <label><input type="checkbox" id="apSync"> <span data-en="Motion sync">Motion sync</span></label>
+              <label><input type="checkbox" id="apRipple"> <span data-en="Ripple control">波紋控制</span></label>
+              <label><span data-en="Sensor angle">傳感器旋轉</span> <input type="number" id="apAngle" class="narrow" min="-90" max="90" value="0"> <span data-en="°">度</span></label>
+            </div>
+            <div class="table-wrap"><table id="apDpi" class="ap-table">
+              <thead><tr><th data-en="Level">段</th><th data-en="On">啟用</th><th>X DPI</th><th>Y DPI</th><th data-en="LED colour">燈色</th></tr></thead><tbody></tbody>
+            </table></div>
+            <p class="note" data-en="X and Y DPI go to the sensor's two axes. Features this board lacks (glass mode and so on) keep the value read.">DPI 的 X、Y 分別套到感測器兩軸。玻璃模式等這片沒有的功能只保留讀到的值。</p>
+          </section>
+
+          <section class="sec">
+            <h3><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 7h-9"/><path d="M14 17H5"/><circle cx="17" cy="17" r="3"/><circle cx="7" cy="7" r="3"/></svg><span data-en="System (04 / 84 xx 02)">系統參數（04／84 xx 02）</span></h3>
+            <div class="row">
+              <button class="btn" data-need="any" id="apGetSys" data-en="Read">讀取</button>
+              <button class="btn primary" data-need="any" data-loaded="sys" id="apSetSys" data-en="Write">寫入</button>
+            </div>
+            <div class="row">
+              <label><span data-en="Wired rate">有線回報率</span> <select id="apWired"></select></label>
+              <label><span data-en="2.4G rate">2.4G 回報率</span> <select id="apWl"></select></label>
+              <label><span data-en="2.4G deep sleep">2.4G 深睡</span> <input type="number" id="apSleep" min="0" max="65535"> <span data-en="s">秒</span></label>
+              <label><span data-en="BLE deep sleep">BLE 深睡</span> <input type="number" id="apBle" min="0" max="65535"> <span data-en="s">秒</span></label>
+            </div>
+            <div class="table-wrap"><table class="ap-table">
+              <thead><tr><th data-en="Debounce (ms)">去彈跳（ms）</th><th data-en="Press">按下</th><th data-en="Release">放開</th><th data-en="Fast response">快速響應</th></tr></thead>
+              <tbody>
+                <tr><td data-en="Left">左鍵</td><td><input type="number" class="narrow" id="apDbLp" min="0" max="20"></td><td><input type="number" class="narrow" id="apDbLf" min="0" max="20"></td><td><input type="checkbox" id="apFastL"></td></tr>
+                <tr><td data-en="Right">右鍵</td><td><input type="number" class="narrow" id="apDbRp" min="0" max="20"></td><td><input type="number" class="narrow" id="apDbRf" min="0" max="20"></td><td><input type="checkbox" id="apFastR"></td></tr>
+                <tr><td data-en="Other keys">其他鍵</td><td><input type="number" class="narrow" id="apDbOp" min="0" max="20"></td><td><input type="number" class="narrow" id="apDbOf" min="0" max="20"></td><td></td></tr>
+              </tbody>
+            </table></div>
+            <div class="row">
+              <label><input type="checkbox" id="apWheelRev"> <span data-en="Reverse wheel">滾輪反向</span></label>
+              <label><input type="checkbox" id="apBtnWake"> <span data-en="Wake on key">按鍵喚醒</span></label>
+              <label><input type="checkbox" id="apMoveWake"> <span data-en="Wake on motion">移動喚醒</span></label>
+              <label><input type="checkbox" id="apWheelWake"> <span data-en="Wake on wheel (mechanical encoder; stored only on boards without one)">滾輪喚醒（機械編碼器有效；沒有的板子只儲存）</span></label>
+            </div>
+            <p class="note" data-en="With wake on key and on motion both off, the mouse still wakes on a key (or it could never wake). Deep sleep = the total idle seconds (spec 60 / 120 / 180 / 300 / 600 / 1200 / 1800, default 300). 2.4G: the mouse powers off, as with DPI held 3 s, and needs DPI held to start again; BLE: deep sleep, any motion wakes it. Standby after 2 s idle, light sleep after 10 s. 0 = never; under 10 becomes 10. The rate tables, key types, motor and the other fields keep the values read.">按鍵喚醒和移動喚醒都關掉時，滑鼠仍保留按鍵喚醒（否則叫不醒）。深睡是停手到底的總秒數（規格 60／120／180／300／600／1200／1800，預設 300）：2.4G 到時間關機，和 DPI 按 3 秒關機相同，要按住 DPI 才能再開機；BLE 到時間進深睡，動一下就醒。停手 2 秒待機、10 秒淺睡。0 = 不睡；小於 10 會被改成 10。回報率表、按鍵類型、馬達等其餘欄位保留讀到的值。</p>
+          </section>
+
+          <section class="sec">
+            <h3><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 8h.01"/><path d="M12 12h.01"/><path d="M14 8h.01"/><path d="M16 12h.01"/><path d="M18 8h.01"/><path d="M6 8h.01"/><path d="M7 16h10"/><path d="M8 12h.01"/><rect width="20" height="16" x="2" y="4" rx="2"/></svg><span data-en="Keys (03 / 83)">按鍵（03／83）</span></h3>
+            <div class="row">
+              <button class="btn" data-need="any" id="apGetKeys" data-en="Read">讀取</button>
+              <button class="btn primary" data-need="any" data-loaded="keys" id="apSetKeys" data-en="Write">寫入</button>
+            </div>
+            <div class="keys-grid">
+              <div class="table-wrap"><table id="apKeyTable" class="ap-table">
+                <thead><tr><th>#</th><th data-en="Key">按鍵</th><th data-en="4 bytes (hex)">4 bytes（16 進位）</th><th data-en="Meaning">意思</th><th></th></tr></thead><tbody></tbody>
+              </table></div>
+              <div class="key-editor">
+                <div><strong id="keTitle"></strong> <span class="sub" data-en="(changes here edit the 4 bytes on the left; “Write” sends them)">（改這裡會直接改左邊的 4 bytes，按「寫入」才送出）</span></div>
+                <div class="row"><label><span data-en="Kind">類別</span> <select id="keCat"></select></label></div>
+                <div id="keFields"></div>
+              </div>
+            </div>
+            <p class="note" data-en="Mouse 01 00 F0–F4 (left right middle back forward), wheel 01 00 F8 amount; keyboard 00 modifiers code 00; media 03 00 usage-low usage-high; DPI 07 00 01 + / 02 − / 03 cycle / 04 set; rate 05 …; profile 08 …; disabled 00 00 00 00; left double-click 01 00 F9 00; macro 09 count index type, or 0C 00 index 00; rapid fire 1N bits n interval-ms (N×256+n shots, 0 = while held; 2N modifier bits, 3N key code).">滑鼠鍵 01 00 F0～F4（左右中後退前進）、滾輪 01 00 F8 倍數；鍵盤 00 修飾 鍵碼 00；多媒體 03 00 usage低 usage高；DPI 07 00 01＋／02－／03 循環／04 指定；回報率 05 …；profile 08 …；停用 00 00 00 00；左鍵雙擊 01 00 F9 00；巨集 09 次數 序號 類型，或 0C 00 序號 00；火力鍵 1N 鍵位元 n 間隔ms（N×256+n 發，0 = 按住持續；2N 修飾位元、3N 鍵碼）。</p>
+          </section>
+
+          <section class="sec">
+            <h3><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 12H3"/><path d="M16 6H3"/><path d="M12 18H3"/><path d="m16 12 5 3-5 3v-6Z"/></svg><span data-en="Macros (05 / 85, one table for all profiles, up to 4096 bytes)">巨集（05／85，所有 profile 共用一份，最多 4096 bytes）</span></h3>
+            <div class="row">
+              <button class="btn" data-need="any" id="apGetMac" data-en="Read macros">讀取巨集表</button>
+              <button class="btn primary" data-need="any" data-loaded="mac" id="apSetMac" data-en="Write to the mouse and save (05 + AC F4)">寫入滑鼠並存檔（05 + AC F4）</button>
+              <button class="btn" data-need="any" id="apClrMac" data-en="Clear all macros AB F4">清除全部巨集 AB F4</button>
+              <span id="macInfo" class="sub"></span>
+            </div>
+            <div class="table-wrap"><table id="apMacTable" class="ap-table">
+              <thead><tr><th data-en="Index">序號</th><th data-en="Name">名稱</th><th data-en="Type">類型</th><th data-en="Count">次數</th><th data-en="Delay">統一延時</th><th data-en="Events">事件</th><th></th></tr></thead><tbody></tbody>
+            </table></div>
+            <div class="row">
+              <label><span data-en="Index">序號</span> <input type="number" id="mIdx" class="narrow" min="0" max="255" value="0"></label>
+              <label><span data-en="Name">名稱</span> <input type="text" id="mName" maxlength="17" style="width:10em"></label>
+              <label><span data-en="Type">類型</span> <select id="mType">
+                <option value="1" data-en="1 once">1 只發一次</option><option value="2" data-en="2 while held">2 按住一直發</option>
+                <option value="3" data-en="3 loop until any key">3 循環到任意鍵</option><option value="4" data-en="4 repeat n times">4 連發 n 次</option>
+                <option value="5" data-en="5 loop until pressed again">5 循環到再按一次</option><option value="6" data-en="6 n times or any key stops">6 n 次或任意鍵停</option></select></label>
+              <label><span data-en="Count">次數</span> <input type="number" id="mCnt" class="narrow" min="0" max="65535" value="1"></label>
+              <label><span data-en="Delay">統一延時</span> <input type="number" id="mDelay" class="narrow" min="0" max="65535" value="0"> ms</label>
+            </div>
+            <textarea id="mEvents" rows="6" placeholder="每行一個事件，例：kd 04 50（按下 A，之後等 50 ms）" data-en-placeholder="One event per line, e.g. kd 04 50 (press A, then wait 50 ms)"></textarea>
+            <div class="row">
+              <button class="btn" id="apMacPut" data-en="Put in the table (not written yet)">加入／取代到表（還沒寫入）</button>
+              <button class="btn" id="apMacDel" data-en="Remove this index from the table">從表刪除這個序號</button>
+            </div>
+            <p class="note" data-en="Event syntax (key codes and bits in hex, the rest decimal, the last number is the delay after it in ms): kd / ku code (press / release, E0–E7 = modifiers), md / mu modifier bits, cd / cu media number (0 next … 3 play 4 mute 5 volume + 6 volume −), bd / bu mouse button bits (1 left 2 right 4 middle 8 back 10 forward), w wheel, x, y (−127–127), xy X Y (fixed 5 ms), dyn X Y ms 0 / 1 (1 = move evenly over that time). To point a key at a macro: key table 09 count index type, or 0C 00 index 00 (count and type from here).">事件語法（鍵碼與位元用 16 進位，其餘 10 進位，最後一個數字是之後的延時 ms）：kd／ku 鍵碼（按下／放開，E0～E7 = 修飾鍵）、md／mu 修飾位元、cd／cu 多媒體編號（0 下一首 … 3 播放 4 靜音 5 音量＋ 6 音量－）、bd／bu 滑鼠鍵位元（1 左 2 右 4 中 8 後退 10 前進）、w 滾輪、x、y（-127～127）、xy X Y（固定 5 ms）、dyn X Y 毫秒 0／1（1 = 在這段時間內平均移動）。按鍵要指到巨集：按鍵表填 09 次數 序號 類型，或 0C 00 序號 00（用這裡的次數與類型）。</p>
+          </section>
+
+          <section class="sec">
+            <h3><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="4 17 10 11 4 5"/><line x1="12" x2="20" y1="19" y2="19"/></svg><span data-en="Raw command">手動指令</span></h3>
+            <div class="row">
+              <input type="text" id="rawHex" class="mono" style="flex:1; min-width:220px" placeholder="例：1A 8A 01（不足 64 bytes 自動補 0）" data-en-placeholder="e.g. 1A 8A 01 (padded with 0 to 64 bytes)">
+              <button class="btn" data-need="any" id="btnRaw" data-en="Send">送出</button>
+            </div>
+            <p class="note" data-en="The command and the reply go to the log (TX / RX). Tick “Packets” above the log to see every command's bytes.">指令和回覆會記在右邊的記錄（TX／RX）。勾記錄上方的「封包」可以看到每個指令的位元組。</p>
+          </section>
+        </div>
       </div>
     </section>
 
     <section class="panel alt" aria-label="記錄" data-en-aria-label="Log">
       <div class="panel-head">
-        <span data-en="Log">記錄</span>
-        <button id="btnClear" class="btn small" data-en="Clear">清除</button>
+        <span class="row"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 12h-5"/><path d="M15 8h-5"/><path d="M19 17V5a2 2 0 0 0-2-2H4"/><path d="M8 21h12a2 2 0 0 0 2-2v-1a1 1 0 0 0-1-1H11a1 1 0 0 0-1 1v1a2 2 0 1 1-4 0V5a2 2 0 1 0-4 0v2a1 1 0 0 0 1 1h3"/></svg><span data-en="Log">記錄</span></span>
+        <span class="row">
+          <label class="log-opt" title="每個指令的送出（TX）與回覆（RX）都用 16 進位記下來" data-en-title="Log every command (TX) and reply (RX) in hex"><input type="checkbox" id="logPkt"> <span data-en="Packets">封包</span></label>
+          <button id="btnClear" class="btn small" data-en="Clear">清除</button>
+        </span>
       </div>
       <pre id="log" class="monitor" tabindex="0" aria-live="polite"></pre>
     </section>
@@ -547,7 +849,7 @@
 
   <footer class="footer">
     <span data-en="The firmware is handled on this PC only and never uploaded to a server. Needs Chrome / Edge on a computer (WebHID).">韌體只在這台電腦上處理，不會上傳到任何伺服器。需要 Chrome／Edge 電腦版（WebHID）。</span>
-    <span data-en="GSKY · same update protocol as dfu_hid_update.py, same test commands as ap_web.html">GSKY · 更新協議與 dfu_hid_update.py 相同，產測指令與 ap_web.html 相同</span>
+    <span data-en="GSKY · same update protocol as dfu_hid_update.py, same test and settings commands as ap_web.html">GSKY · 更新協議與 dfu_hid_update.py 相同，產測與 AP 設定指令與 ap_web.html 相同</span>
   </footer>
 
   <dialog id="dlg" class="dialog">
@@ -598,6 +900,9 @@ let cancel = false;
 let waiter = null;     // { match, resolve, timer }
 let chain = Promise.resolve();
 let piLoaded = false;  // product info read from this device (write only after a read)
+let apLoaded = {};     // AP settings blocks read from this device: sen / sys / keys / mac (write after a read)
+let apAuto = false;    // the AP tab has read this device once
+let curTab = 'dfu';
 
 // ── Language (zh / en) ──────────────────────────────────────────────────────
 // Static text: data-en="..." (plain text) and data-en-<attribute>="..." on the element, or a
@@ -607,6 +912,9 @@ let lang = 'zh';
 const T = (zh, en) => ({ zh, en });
 const tx = t => (t && typeof t === 'object' && 'zh' in t) ? t[lang] : (t == null ? '' : String(t));
 const live = new Set();
+const langHooks = [];  // re-renders that put() cannot do (the key editor)
+// Joins strings and T pairs into one T pair.
+const J = (...p) => T(p.map(x => (x && typeof x === 'object') ? x.zh : x).join(''), p.map(x => (x && typeof x === 'object') ? x.en : x).join(''));
 function put(el, t) {
   el._t = t;
   el.textContent = tx(t);
@@ -633,6 +941,7 @@ function applyLang(l) {
     }
   });
   for (const el of live) { if (el.isConnected) el.textContent = tx(el._t); else live.delete(el); }
+  langHooks.forEach(f => f());
 }
 
 // ── Log, status, steps ──────────────────────────────────────────────────────
@@ -700,18 +1009,23 @@ function setPref(key, v) { try { localStorage.setItem(key, v); } catch (e) { /* 
   });
   applyLang(l);
 })();
+const TABS = ['dfu', 'mp', 'ap'];
 function showTab(name) {
+  if (!TABS.includes(name)) name = 'dfu';
+  curTab = name;
   document.querySelectorAll('.tab').forEach(t => t.setAttribute('aria-selected', String(t.dataset.tab === name)));
-  $('page-dfu').hidden = name !== 'dfu';
-  $('page-mp').hidden = name !== 'mp';
+  TABS.forEach(t => { $('page-' + t).hidden = t !== name; });
+  document.querySelector('.workspace').classList.toggle('wide', name === 'ap');
   setPref('gsky-dfu-tab', name);
+  if (name === 'ap' && dev && !busy && !apAuto) apAutoLoad();
 }
 document.querySelectorAll('.tab').forEach(t => {
   t.onclick = () => showTab(t.dataset.tab);
   t.onkeydown = e => {
     if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
-    const other = document.querySelector(`.tab:not([data-tab="${t.dataset.tab}"])`);
-    other.focus(); showTab(other.dataset.tab);
+    const tabs = Array.from(document.querySelectorAll('.tab'));
+    const next = tabs[(tabs.indexOf(t) + (e.key === 'ArrowRight' ? 1 : tabs.length - 1)) % tabs.length];
+    next.focus(); showTab(next.dataset.tab);
   };
 });
 showTab(pref('gsky-dfu-tab', 'dfu'));
@@ -738,11 +1052,16 @@ function txrx(bytes, match, ms) {
     catch (err) { if (waiter) { clearTimeout(waiter.timer); waiter = null; } reject(err); }
   });
 }
-// Test commands go one at a time (a late answer must not answer the next one).
+// Test and settings commands go one at a time (a late answer must not answer the next one),
+// and never during an update or roll back (one waiter: it would take the DFU's answer).
+const pktLog = () => $('logPkt').checked;
 function request(bytes, match, ms = 1500) {
   const run = async () => {
+    if (busy) throw Err(T('更新中，不能送其他指令', 'Updating; no other commands now'));
+    if (pktLog()) log('TX ' + hexs(bytes, 24), 'system');
     const r = await txrx(bytes, match, ms);
     if (!r) throw Err(T('沒有回覆（逾時）', 'No reply (time-out)'));
+    if (pktLog()) log('RX ' + hexs(r, 24));
     return r;
   };
   const p = chain.then(run, run);
@@ -792,7 +1111,10 @@ function notify(b) {
     put(led, T(`DPI 鍵：${down ? '按下' : '放開'}`, `DPI key: ${down ? 'down' : 'up'}`));
     if (down) { keyPresses++; put($('keyCount'), T(`按下 ${keyPresses} 次`, `Pressed ${keyPresses} times`)); }
     log(T(`按鍵測試：DPI 鍵${down ? '按下' : '放開'}`, `Key test: DPI key ${down ? 'down' : 'up'}`), 'ok');
+    return;
   }
+  if (b[0] === 0x1A && b[1] === 0x8A && b[2] === 0x01) { apStatusNote(b); return; }
+  if (pktLog()) log('NT ' + hexs(b, 24), 'system');
 }
 let keyPresses = 0;
 
@@ -805,6 +1127,8 @@ async function openDev(d) {
   dev = d;
   dev.addEventListener('inputreport', onInput);
   piLoaded = false;
+  apLoaded = {};
+  apAuto = false;
   role = d.productId === PID_DONGLE ? 'dongle' : 'mouse';
   devTag = TAGS[role].find(t => (d.productName || '').startsWith(t)) || null;
 }
@@ -859,7 +1183,8 @@ function updateButtons() {
   // production test: 'any' = a device, 'wired' = the mouse on its cable, 'dongle' = the dongle
   document.querySelectorAll('[data-need]').forEach(b => {
     const need = b.dataset.need;
-    b.disabled = !ok || (need === 'wired' && role !== 'mouse') || (need === 'dongle' && role !== 'dongle');
+    b.disabled = !ok || (need === 'wired' && role !== 'mouse') || (need === 'dongle' && role !== 'dongle') ||
+      (!!b.dataset.loaded && !apLoaded[b.dataset.loaded]);
   });
   $('piSet').disabled = !ok || !piLoaded;          // read before write
   $('secRf').setAttribute('aria-disabled', String(!!dev && role !== 'mouse'));
@@ -895,8 +1220,8 @@ $('btnConnect').onclick = async () => {
     const d = list.find(vendorIf);
     if (!d) { log(T('沒有選到裝置', 'No device chosen'), 'system'); return; }
     if (d.productId === PID_MOUSE && !d.productName) {
-      throw Err(T('這是藍牙連線的滑鼠，藍牙不能更新也不能產測。請用 USB 線連接滑鼠。',
-        'This mouse is connected over Bluetooth, which can neither update nor test. Connect the mouse with its USB cable.'));
+      throw Err(T('這是藍牙連線的滑鼠，藍牙不能更新、產測或設定。請用 USB 線連接滑鼠。',
+        'This mouse is connected over Bluetooth, which can neither update, test nor change settings. Connect the mouse with its USB cable.'));
     }
     await closeDev();
     await openDev(d);
@@ -907,6 +1232,8 @@ $('btnConnect').onclick = async () => {
     status(T(`已連接：${d.productName}`, `Connected: ${d.productName}`), 'ready');
     step(img ? 4 : 3);
     showCompat();
+    updateButtons();
+    if (curTab === 'ap') await apAutoLoad();
     await pickOnline();
   } catch (err) {
     log(T('連接失敗：' + (err.message || err), 'Connection failed: ' + (err.message || err)), 'err');
@@ -1446,11 +1773,688 @@ $('rsErase').onclick = () => act(async () => {
   log(T('全部擦除，滑鼠重開機中', 'Erased all, the mouse is rebooting'), 'system');
 });
 
+// ── AP settings (the other vendor commands of ap_web.html; mouse_profile.h) ──
+const RATES = ['125 Hz', '250 Hz', '500 Hz', '1000 Hz', '2000 Hz', '4000 Hz', '8000 Hz'];
+const KEY_NAMES = [T('左鍵', 'Left'), T('右鍵', 'Right'), T('中鍵', 'Middle'), T('前進 B5', 'Forward B5'), T('後退 B4', 'Back B4'),
+  T('DPI 鍵', 'DPI key'), T('回報率鍵（無）', 'Rate key (none)'), T('配對鍵（無）', 'Pair key (none)'), T('保留', 'Reserved'),
+  T('保留', 'Reserved'), T('滾輪上', 'Wheel up'), T('滾輪下', 'Wheel down')];
+// Block offsets (mouse_profile.h SS_* / SY_*).
+const SS = { SNAP: 0, RIPPLE: 1, SYNC: 2, LOD: 7, ANGLE: 8, LEVEL: 9, FLAG: 10, TABLE: 11, RGB: 35, LEN: 55 };
+const SY = { SLEEP: 0, BLE: 2, WRR: 4, WFLAG: 5, WTAB: 6, LRR: 13, LFLAG: 14, LTAB: 15, FAST: 26,
+  LP: 27, LF: 28, RP: 29, RF: 30, OP: 31, OF: 32, BWAKE: 41, MWAKE: 42, WWAKE: 43, WREV: 44, LEN: 52 };
+const is = (c, s2) => r => r[0] === 0x1A && r[1] === c && (s2 === undefined || r[2] === s2);
+const put16 = (b, i, v) => { b[i] = v & 0xFF; b[i + 1] = (v >> 8) & 0xFF; };
+const s8 = v => (v << 24) >> 24, s16 = v => (v << 16) >> 16;
+const prof = () => +$('apProf').value;
+const toHexColor = (r, g, b) => '#' + [r, g, b].map(h2).join('').toLowerCase();
+const fromHexColor = s => [1, 3, 5].map(i => parseInt(s.substr(i, 2), 16));
+const bcdVer = v => `${(v >> 8).toString(16)}.${h2(v & 0xFF)}`;     // 0x0099 = 0.99
+const pickT = (list, v) => list[v] ?? String(v);
+let senRaw = null, sysRaw = null;      // the last blocks read: fields the page does not edit go back as read
+function apDone(key) { apLoaded[key] = true; updateButtons(); }
+
+const STATE = [T('無連線', 'Not connected'), T('已連線', 'Connected'), T('MCU2 異常', 'MCU2 fault'), T('無線休眠／無配對', 'Wireless asleep / not paired')];
+const CHG = [T('未充電', 'Not charging'), T('充電中', 'Charging'), T('已充滿', 'Full'), T('低電量', 'Low')];
+const RX_STATE = [T('無連線（已配對）', 'Not connected (paired)'), T('已連線', 'Connected'), T('MCU2 異常', 'MCU2 fault'), T('無配對', 'Not paired')];
+const UPD = [T('profile', 'profile'), T('DPI', 'DPI'), T('回報率', 'rate'), T('燈效', 'lighting'), T('電量', 'battery'), T('配對成功', 'paired'), T('進入休眠', 'sleep')];
+
+function statusRows(b) {
+  return [
+    [T('裝置狀態', 'Device state'), pickT(STATE, b[3])],
+    [T('VID／PID', 'VID / PID'), `${h4(le16(b, 5))} / ${h4(le16(b, 7))}`],
+    // state 0 from the dongle = the mouse is unreachable, the rest is 0 (not a level)
+    [T('電量', 'Battery'), b[3] === 0 ? T('—（滑鼠未連線）', '— (mouse not connected)') : J(`${b[10]} %`, T('（', ' ('), pickT(CHG, b[9]), T('）', ')'))],
+    [T('使用中 profile', 'Active profile'), b[12]],
+    ['DPI', T(`第 ${b[16]} 段：X ${le16(b, 17)}、Y ${le16(b, 19)}`, `Level ${b[16]}: X ${le16(b, 17)}, Y ${le16(b, 19)}`)],
+    [T('抬起高度', 'Lift-off'), (b[15] & 0x1F) / 10 + ' mm'],
+    [T('回報率', 'Report rate'), T(`${RATES[b[25]] ?? b[25]}（檔位 ${b[24] & 0x7F}）`, `${RATES[b[25]] ?? b[25]} (level ${b[24] & 0x7F})`)],
+  ];
+}
+// 8A 01 the mouse sends by itself when something changes.
+function apStatusNote(b) {
+  const f = UPD.filter((_, i) => b[11] & (1 << i));
+  const what = f.length ? J(...f.flatMap((x, i) => i ? [T('、', ', '), x] : [x])) : '—';
+  log(J(T('狀態通知（', 'Status notice ('), what,
+    T(`）：profile ${b[12]}、DPI 段 ${b[16]}（${le16(b, 17)}）、電量 ${b[10]}%`, `): profile ${b[12]}, DPI level ${b[16]} (${le16(b, 17)}), battery ${b[10]}%`)), 'system');
+  kv('apStatusKv', statusRows(b));
+}
+
+// Versions are BCD. Through a dongle: its own 8A 04, and the mouse's 8A 02 unless the dongle
+// answers 8A 01 state 0 (mouse unreachable). Null: no mouse.
+async function apVersions() {
+  const viaDongle = role === 'dongle';
+  const dg = viaDongle ? bcdVer(le16(await request([0x1A, 0x8A, 0x04], is(0x8A, 0x04)), 3)) : null;
+  const v = await request([0x1A, 0x8A, 0x02], r => is(0x8A, 0x02)(r) || (viaDongle && is(0x8A, 0x01)(r) && r[3] === 0));
+  const ok = v[2] === 0x02;
+  const mv = ok ? bcdVer(le16(v, 3)) : null, pv = ok ? h4(le16(v, 7)) : '';
+  put($('apVer'), T(`滑鼠 ${mv || '未連線'}${dg ? '　Dongle ' + dg : ''}${ok ? '　協議 0x' + pv : ''}`,
+    `Mouse ${mv || 'not connected'}${dg ? ' · Dongle ' + dg : ''}${ok ? ' · protocol 0x' + pv : ''}`));
+  return ok ? v : null;
+}
+
+async function apAutoLoad() {
+  if (!dev || busy) return;
+  apAuto = true;
+  log(T('AP 設定：讀取裝置…', 'AP settings: reading the device…'), 'system');
+  try {
+    if (!await apVersions()) {
+      log(T('滑鼠沒有連上 dongle，只讀到 dongle；滑鼠連上後按「全部重讀」', 'The mouse is not linked to the dongle, only the dongle answered; press “Read all” once it is'), 'system');
+      return;
+    }
+    const st = await request([0x1A, 0x8A, 0x01], is(0x8A, 0x01));
+    kv('apStatusKv', statusRows(st));
+    if (st[12] < 5) {
+      $('apProf').value = String(st[12]);
+      put($('apActive'), T(`使用中 profile：${st[12]}（已自動選取）`, `Active profile: ${st[12]} (selected)`));
+    }
+    await getSen(); await getSys(); await getKeys(); await getMac();
+    log(T('AP 設定：讀取完成', 'AP settings: read'), 'ok');
+  } catch (err) {
+    log(J(T('AP 設定讀取失敗：', 'AP settings: reading failed: '), errT(err)), 'err');
+  }
+}
+
+$('apReload').onclick = () => act(async () => { apAuto = false; await apAutoLoad(); });
+$('apStatus').onclick = () => act(async () => kv('apStatusKv', statusRows(await request([0x1A, 0x8A, 0x01], is(0x8A, 0x01)))));
+$('apFw').onclick = () => act(async () => {
+  const b = await apVersions();
+  if (!b) { log(T('滑鼠未連線', 'Mouse not connected'), 'system'); return; }
+  kv('apStatusKv', [[T('USB MCU 版本', 'USB MCU version'), '0x' + h4(le16(b, 3))],
+    [T('RF MCU 版本', 'RF MCU version'), J('0x' + h4(le16(b, 5)), le16(b, 5) === 0xFFFF ? T('（無）', ' (none)') : '')],
+    [T('協議版本', 'Protocol version'), '0x' + h4(le16(b, 7))]]);
+});
+$('apRx').onclick = () => act(async () => {
+  const a = await request([0x1A, 0x8A, 0x03], is(0x8A, 0x03));
+  const v = await request([0x1A, 0x8A, 0x04], is(0x8A, 0x04));
+  kv('apStatusKv', [[T('接收器狀態', 'Receiver state'), pickT(RX_STATE, a[3])], [T('最大回報率', 'Max rate'), RATES[a[4]] ?? String(a[4])],
+    [T('VID／PID', 'VID / PID'), `${h4(le16(a, 5))} / ${h4(le16(a, 7))}`], [T('接收器版本', 'Receiver version'), '0x' + h4(le16(v, 3))],
+    [T('協議版本', 'Protocol version'), '0x' + h4(le16(v, 7))]]);
+});
+$('apBatt').onclick = () => act(async () => {
+  const b = await request([0x1A, 0x88], is(0x88));
+  kv('apStatusKv', [[T('電量', 'Battery'), b[3] + ' %'], [T('充電狀態', 'Charging'), pickT(CHG, b[4])]]);
+});
+
+// ── AP: profile, save, reset ────────────────────────────────────────────────
+$('apSetActive').onclick = () => act(async () => {
+  const b = await request([0x1A, 0x01, prof()], is(0x01));
+  put($('apActive'), T(`使用中 profile：${b[2]}（要按存檔才會保留）`, `Active profile: ${b[2]} (press Save to keep it)`));
+});
+const apCmd = (c, s, msg) => act(async () => { await request([0x1A, c, s, 0], is(c, s)); log(msg, 'ok'); });
+$('apSaveAll').onclick = () => apCmd(0xAC, 0xFF, T('已存檔（全部）', 'Saved (all)'));
+$('apSaveProf').onclick = () => apCmd(0xAC, 0xF0, T('已存檔（profile）', 'Saved (profile)'));
+$('apCancel').onclick = () => act(async () => {
+  await request([0x1A, 0xAC, 0xFE], is(0xAC, 0xFE));
+  log(T('已取消修改，重新讀取', 'Changes undone; reading again'), 'ok');
+  await apAutoLoad();
+});
+$('apResetProf').onclick = () => act(async () => { await request([0x1A, 0xAB, 0xF0, prof()], is(0xAB, 0xF0)); await apAutoLoad(); });
+$('apResetKeys').onclick = () => act(async () => { await request([0x1A, 0xAB, 0xF1, prof()], is(0xAB, 0xF1)); await getKeys(); });
+$('apResetPerf').onclick = () => act(async () => { await request([0x1A, 0xAB, 0xF2, prof()], is(0xAB, 0xF2)); await apAutoLoad(); });
+$('apFactory').onclick = () => act(async () => {
+  if (!await ask({ title: T('恢復出廠', 'Factory reset'), note: T('所有 profile 與巨集回到預設並存檔（配對保留）。', 'All profiles and macros go back to defaults and are saved (pairing kept).'),
+    yes: T('恢復出廠', 'Factory reset') })) return;
+  await request([0x1A, 0xAB, 0xFF], is(0xAB, 0xFF));
+  log(T('已恢復出廠，重新讀取', 'Factory reset done; reading again'), 'ok');
+  await sleep(800);
+  await apAutoLoad();
+});
+$('apEraseAll').onclick = () => act(async () => {
+  if (!await ask({ title: T('全部擦除', 'Erase all'), note: T('所有設定、2.4G 配對、BLE 配對都會清掉，滑鼠會重開機。', 'All settings, the 2.4G pairing and the BLE pairing are cleared; the mouse reboots.'),
+    yes: T('全部擦除', 'Erase all'), danger: true })) return;
+  await request([0x1A, 0xAB, 0xFE], is(0xAB, 0xFE));
+  log(T('滑鼠將重開機，請重新配對後再連線', 'The mouse reboots; pair it again, then reconnect'), 'system');
+});
+
+// ── AP: sensor block ────────────────────────────────────────────────────────
+(function buildSensor() {
+  const tb = $('apDpi').tBodies[0];
+  for (let i = 0; i < 6; i++) {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td>${i}</td><td><input type="checkbox" id="apEn${i}"></td>` +
+      `<td><input type="number" min="50" max="26000" step="50" id="apX${i}"></td>` +
+      `<td><input type="number" min="50" max="26000" step="50" id="apY${i}"></td>` +
+      `<td><input type="color" id="apC${i}"></td>`;
+    tb.appendChild(tr);
+    $('apLevel').add(new Option(String(i), String(i)));
+  }
+  RATES.forEach((r, i) => { $('apWired').add(new Option(r, String(i))); $('apWl').add(new Option(r, String(i))); });
+})();
+
+async function getSen() {
+  const b = await request([0x1A, 0x84, prof(), 0x01], r => is(0x84)(r) && r[3] === 0x01);
+  senRaw = b.slice(4, 4 + SS.LEN);
+  $('apLevel').value = String(senRaw[SS.LEVEL]);
+  const lod = senRaw[SS.LOD];
+  $('apLod').value = lod <= 8 ? '7' : lod <= 14 ? '10' : '20';
+  $('apSnap').checked = !!senRaw[SS.SNAP];
+  $('apSync').checked = !!senRaw[SS.SYNC];
+  $('apRipple').checked = !!senRaw[SS.RIPPLE];
+  $('apAngle').value = s8(senRaw[SS.ANGLE]);
+  for (let i = 0; i < 6; i++) {
+    $('apEn' + i).checked = !!(senRaw[SS.FLAG] & (1 << i));
+    $('apX' + i).value = le16(senRaw, SS.TABLE + i * 4);
+    $('apY' + i).value = le16(senRaw, SS.TABLE + i * 4 + 2);
+    $('apC' + i).value = toHexColor(senRaw[SS.RGB + i * 3], senRaw[SS.RGB + i * 3 + 1], senRaw[SS.RGB + i * 3 + 2]);
+  }
+  apDone('sen');
+}
+$('apGetSen').onclick = () => act(getSen);
+$('apSetSen').onclick = () => act(async () => {
+  const s = senRaw.slice();
+  let flag = 0;
+  for (let i = 0; i < 6; i++) {
+    if ($('apEn' + i).checked) flag |= 1 << i;
+    const x = parseInt($('apX' + i).value, 10), y = parseInt($('apY' + i).value, 10);
+    if (!(x >= 50 && x <= 26000 && y >= 50 && y <= 26000)) throw Err(T(`第 ${i} 段 DPI 要 50～26000`, `Level ${i}: DPI must be 50–26000`));
+    put16(s, SS.TABLE + i * 4, x); put16(s, SS.TABLE + i * 4 + 2, y);
+    fromHexColor($('apC' + i).value).forEach((c, k) => { s[SS.RGB + i * 3 + k] = c; });
+  }
+  if (!flag) throw Err(T('至少要啟用一段', 'Enable at least one level'));
+  const lv = +$('apLevel').value;
+  if (!(flag & (1 << lv))) throw Err(T('目前段必須是啟用的段', 'The current level must be an enabled one'));
+  s[SS.FLAG] = flag; s[SS.LEVEL] = lv;
+  s[SS.LOD] = +$('apLod').value;
+  s[SS.SNAP] = $('apSnap').checked ? 1 : 0;
+  s[SS.SYNC] = $('apSync').checked ? 1 : 0;
+  s[SS.RIPPLE] = $('apRipple').checked ? 1 : 0;
+  const ang = parseInt($('apAngle').value, 10);
+  if (!(ang >= -90 && ang <= 90)) throw Err(T('傳感器旋轉要 -90～90 度', 'Sensor angle must be −90–90°'));
+  s[SS.ANGLE] = ang & 0xFF;
+  await request([0x1A, 0x04, prof(), 0x01, ...s], r => is(0x04)(r) && r[3] === 0x01);
+  log(T('Sensor 參數已寫入（未存檔），讀回確認', 'Sensor settings written (not saved); reading back'), 'ok');
+  await getSen();
+});
+
+// ── AP: system block ────────────────────────────────────────────────────────
+const DB = [['apDbLp', SY.LP], ['apDbLf', SY.LF], ['apDbRp', SY.RP], ['apDbRf', SY.RF], ['apDbOp', SY.OP], ['apDbOf', SY.OF]];
+async function getSys() {
+  const b = await request([0x1A, 0x84, prof(), 0x02], r => is(0x84)(r) && r[3] === 0x02);
+  sysRaw = b.slice(4, 4 + SY.LEN);
+  $('apWired').value = String(sysRaw[SY.WTAB + sysRaw[SY.WRR]] ?? sysRaw[SY.WRR]);
+  $('apWl').value = String(sysRaw[SY.LTAB + sysRaw[SY.LRR]] ?? sysRaw[SY.LRR]);
+  $('apSleep').value = le16(sysRaw, SY.SLEEP);
+  $('apBle').value = le16(sysRaw, SY.BLE);
+  DB.forEach(([id, o]) => { $(id).value = sysRaw[o]; });
+  $('apFastL').checked = !!(sysRaw[SY.FAST] & 1);
+  $('apFastR').checked = !!(sysRaw[SY.FAST] & 2);
+  $('apWheelRev').checked = !!sysRaw[SY.WREV];
+  $('apBtnWake').checked = !!sysRaw[SY.BWAKE];
+  $('apMoveWake').checked = !!sysRaw[SY.MWAKE];
+  $('apWheelWake').checked = !!sysRaw[SY.WWAKE];
+  apDone('sys');
+}
+// A rate code -> its level in the table (the identity table in practice).
+function levelOf(raw, tab, code) {
+  for (let i = 0; i < 7; i++) if (raw[tab + i] === code) return i;
+  return code;
+}
+$('apGetSys').onclick = () => act(getSys);
+$('apSetSys').onclick = () => act(async () => {
+  const s = sysRaw.slice();
+  const sl = parseInt($('apSleep').value, 10), bl = parseInt($('apBle').value, 10);
+  if (!(sl >= 0 && sl <= 65535 && bl >= 0 && bl <= 65535)) throw Err(T('深睡秒數要 0～65535', 'Deep sleep seconds must be 0–65535'));
+  put16(s, SY.SLEEP, sl); put16(s, SY.BLE, bl);
+  const wl = levelOf(s, SY.WTAB, +$('apWired').value);
+  const ll = levelOf(s, SY.LTAB, +$('apWl').value);
+  s[SY.WRR] = wl; s[SY.WFLAG] |= 1 << wl;
+  s[SY.LRR] = ll; s[SY.LFLAG] |= 1 << ll;
+  for (const [id, o] of DB) {
+    const v = parseInt($(id).value, 10);
+    if (!(v >= 0 && v <= 20)) throw Err(T('去彈跳要 0～20 ms', 'Debounce must be 0–20 ms'));
+    s[o] = v;
+  }
+  s[SY.FAST] = (s[SY.FAST] & ~3) | ($('apFastL').checked ? 1 : 0) | ($('apFastR').checked ? 2 : 0);
+  s[SY.WREV] = $('apWheelRev').checked ? 1 : 0;
+  s[SY.BWAKE] = $('apBtnWake').checked ? 1 : 0;
+  s[SY.MWAKE] = $('apMoveWake').checked ? 1 : 0;
+  s[SY.WWAKE] = $('apWheelWake').checked ? 1 : 0;
+  await request([0x1A, 0x04, prof(), 0x02, ...s], r => is(0x04)(r) && r[3] === 0x02);
+  log(T('系統參數已寫入（未存檔），讀回確認', 'System settings written (not saved); reading back'), 'ok');
+  await getSys();
+});
+
+// ── AP: keys ────────────────────────────────────────────────────────────────
+const MOUSE_FN = [[0xF0, T('左鍵', 'Left')], [0xF1, T('右鍵', 'Right')], [0xF2, T('中鍵', 'Middle')], [0xF3, T('後退', 'Back')],
+  [0xF4, T('前進', 'Forward')], [0xF9, T('左鍵雙擊', 'Left double-click')]];
+const stepOp = (op, set) => op === 1 ? T('＋', '+') : op === 2 ? T('－', '−') : op === 3 ? T('＋循環', '+ cycle') : op === 4 ? set : '?';
+// 4 bytes -> what they do.
+function keyDesc([t, b1, b2, b3]) {
+  if ([t, b1, b2, b3].some(Number.isNaN)) return '';
+  if (t === 0x00) return (b1 === 0 && b2 === 0) ? T('停用', 'Disabled')
+    : T(`鍵盤 鍵碼 ${h2(b2)}${b1 ? ' 修飾 ' + h2(b1) : ''}`, `Keyboard code ${h2(b2)}${b1 ? ' modifiers ' + h2(b1) : ''}`);
+  if (t === 0x01) {
+    const fn = MOUSE_FN.find(([v]) => v === b2);
+    return fn ? fn[1] : b2 === 0xF8 ? T(`滾輪 ×${s8(b3)}`, `Wheel ×${s8(b3)}`) : T('滑鼠功能', 'Mouse function');
+  }
+  if (t === 0x02) return T('系統鍵（未實作）', 'System key (not implemented)');
+  if (t === 0x03) return T(`多媒體 usage ${h4(b2 | (b3 << 8))}`, `Media usage ${h4(b2 | (b3 << 8))}`);
+  if (t === 0x05) return J(T('回報率 ', 'Rate '), stepOp(b2, T(`設為 ${RATES[b3] || '檔位 ' + b3}`, `set ${RATES[b3] || 'level ' + b3}`)));
+  if (t === 0x07) return J('DPI ', stepOp(b2, T(`設為第 ${b3 + 1} 段（值 ${b3}）`, `set level ${b3 + 1} (value ${b3})`)));
+  if (t === 0x08) return J('Profile ', stepOp(b2, T(`設為 ${b3}`, `set ${b3}`)));
+  if (t === 0x09) return T(`巨集 #${b2}，次數 ${b1}，類型 ${b3}`, `Macro #${b2}, count ${b1}, type ${b3}`);
+  if (t === 0x0C) return T(`巨集 #${b2}（用巨集裡的次數與類型）`, `Macro #${b2} (count and type from the macro)`);
+  if (t >= 0x10 && t <= 0x3F) {
+    const n = ((t & 0x0F) << 8) | b2, k = t >> 4;
+    return T(`火力鍵 ${['', '滑鼠鍵', '修飾鍵', '鍵盤'][k]} ${h2(b1)}，${n ? n + ' 發' : '按住持續'}，間隔 ${b3 || 1} ms`,
+      `Rapid fire ${['', 'mouse button', 'modifier', 'key'][k]} ${h2(b1)}, ${n ? n + ' shots' : 'while held'}, every ${b3 || 1} ms`);
+  }
+  return T('只儲存（未實作）', 'Stored only (not implemented)');
+}
+function keyBytes(i) { return [0, 1, 2, 3].map(k => parseInt($(`apK${i}_${k}`).value, 16)); }
+function describe(i) { put($('apKd' + i), keyDesc(keyBytes(i))); }
+
+(function buildKeys() {
+  const tb = $('apKeyTable').tBodies[0];
+  KEY_NAMES.forEach((n, i) => {
+    const tr = document.createElement('tr');
+    tr.id = 'apKr' + i;
+    tr.innerHTML = `<td>${i}</td><td></td><td>` +
+      [0, 1, 2, 3].map(k => `<input type="text" class="hex" id="apK${i}_${k}" maxlength="2" aria-label="byte ${k}">`).join(' ') +
+      `</td><td id="apKd${i}" class="desc"></td><td><button class="btn small" id="apKs${i}"></button></td>`;
+    tb.appendChild(tr);
+    put(tr.cells[1], n);
+    put($('apKs' + i), T('設定', 'Edit'));
+    for (let k = 0; k < 4; k++) {
+      $(`apK${i}_${k}`).addEventListener('input', () => { describe(i); if (i === keSel) loadEditor(); });
+      $(`apK${i}_${k}`).addEventListener('focus', () => { if (i !== keSel) selectKey(i); });
+    }
+    $('apKs' + i).onclick = () => selectKey(i);
+  });
+})();
+
+async function getKeys() {
+  const b = await request([0x1A, 0x83, prof(), 0x00], is(0x83));
+  for (let i = 0; i < 12; i++) {
+    for (let k = 0; k < 4; k++) $(`apK${i}_${k}`).value = h2(b[4 + i * 4 + k]);
+    describe(i);
+  }
+  loadEditor();
+  apDone('keys');
+}
+$('apGetKeys').onclick = () => act(getKeys);
+$('apSetKeys').onclick = () => act(async () => {
+  const d = [0x1A, 0x03, prof(), 0x00];
+  for (let i = 0; i < 12; i++) {
+    const kb = keyBytes(i);
+    if (kb.some(v => Number.isNaN(v) || v < 0 || v > 255)) throw Err(T(`按鍵 ${i} 不是 4 個 16 進位位元組`, `Key ${i} is not 4 hex bytes`));
+    d.push(...kb);
+  }
+  await request(d, is(0x03));
+  log(T('按鍵已寫入（未存檔），讀回確認', 'Keys written (not saved); reading back'), 'ok');
+  await getKeys();
+});
+
+// ── AP: macros (one table for all profiles) ─────────────────────────────────
+const MAC_MAX = 4096;
+const MAC_TYPES = ['', T('只發一次', 'once'), T('按住一直發', 'while held'), T('循環到任意鍵', 'loop until any key'), T('連發 n 次', 'repeat n times'),
+  T('循環到再按', 'loop until pressed again'), T('n 次或任意鍵停', 'n times or any key')];
+let macBlocks = null;                  // [{ idx, type, cnt, delay, name, n, ev: Uint8Array }]
+
+function evText(e) {
+  const t = e[0] & 0x7F, up = e[0] & 0x80, d = le16(e, 2);
+  switch (t) {
+    case 1: return `${up ? 'ku' : 'kd'} ${h2(e[1])} ${d}`;
+    case 2: return `${up ? 'mu' : 'md'} ${h2(e[1])} ${d}`;
+    case 3: return `${up ? 'cu' : 'cd'} ${h2(e[1])} ${d}`;
+    case 4: return `${up ? 'bu' : 'bd'} ${h2(e[1])} ${d}`;
+    case 5: return `w ${s8(e[1])} ${d}`;
+    case 6: return `x ${s8(e[1])} ${d}`;
+    case 7: return `y ${s8(e[1])} ${d}`;
+    case 8: {
+      let x = e[1] | ((e[3] & 0x1F) << 8), y = e[2] | ((e[3] >> 5) << 8);
+      if (x & 0x1000) x -= 0x2000;
+      if (y & 0x400) y -= 0x800;
+      return `xy ${x} ${y}`;
+    }
+    case 9: return `dyn ${s16(le16(e, 1))} ${s16(le16(e, 3))} ${le16(e, 5)} ${e[7]}`;
+    default: return `?? ${hexs(e, 4)}`;
+  }
+}
+function evParse(text) {
+  const out = [];
+  text.split(/\n/).map(l => l.trim()).filter(l => l && !l.startsWith('#')).forEach((l, n) => {
+    const [op, ...a] = l.split(/\s+/);
+    const bad = () => Err(T(`第 ${n + 1} 行：${l}`, `Line ${n + 1}: ${l}`));
+    const hx = i => { const v = parseInt(a[i], 16); if (Number.isNaN(v) || v < 0 || v > 255) throw bad(); return v; };
+    const dec = (i, lo, hi) => { const v = parseInt(a[i] ?? '0', 10); if (Number.isNaN(v) || v < lo || v > hi) throw bad(); return v; };
+    const four = (b0, v, d) => out.push([b0, v & 0xFF, d & 0xFF, d >> 8]);
+    const pairs = { kd: 0x01, ku: 0x81, md: 0x02, mu: 0x82, cd: 0x03, cu: 0x83, bd: 0x04, bu: 0x84 };
+    if (op in pairs) four(pairs[op], hx(0), dec(1, 0, 65535));
+    else if (op === 'w' || op === 'x' || op === 'y') four({ w: 5, x: 6, y: 7 }[op], dec(0, -127, 127), dec(1, 0, 65535));
+    else if (op === 'xy') {
+      const x = dec(0, -4096, 4095) & 0x1FFF, y = dec(1, -1024, 1023) & 0x7FF;
+      out.push([0x08, x & 0xFF, y & 0xFF, (x >> 8) | ((y >> 8) << 5)]);
+    } else if (op === 'dyn') {
+      const x = dec(0, -32768, 32767) & 0xFFFF, y = dec(1, -32768, 32767) & 0xFFFF, ms = dec(2, 0, 65535);
+      out.push([0x09, x & 0xFF, x >> 8, y & 0xFF, y >> 8, ms & 0xFF, ms >> 8, dec(3, 0, 1)]);
+    } else throw Err(T(`第 ${n + 1} 行：不認得「${op}」`, `Line ${n + 1}: unknown “${op}”`));
+  });
+  if (!out.length) throw Err(T('巨集至少要一個事件', 'A macro needs at least one event'));
+  return out;
+}
+function evSplit(ev, n) {
+  const list = [];
+  for (let o = 0, i = 0; i < n && o + 4 <= ev.length; i++) {
+    const sz = (ev[o] & 0x7F) === 9 ? 8 : 4;
+    list.push(ev.slice(o, o + sz));
+    o += sz;
+  }
+  return list;
+}
+function nameOf(b) {                   // 34 bytes, UTF-16LE, 0-terminated
+  let s = '';
+  for (let i = 0; i + 1 < 34; i += 2) { const c = le16(b, i); if (!c) break; s += String.fromCharCode(c); }
+  return s;
+}
+function macBuild() {                  // the whole table as bytes
+  const parts = macBlocks.map(m => {
+    const len = 44 + m.ev.length, b = new Uint8Array(len);
+    put16(b, 0, len); put16(b, 2, m.cnt); b[4] = m.idx; b[5] = m.type;
+    for (let i = 0; i < Math.min(17, m.name.length); i++) put16(b, 6 + i * 2, m.name.charCodeAt(i));
+    put16(b, 40, m.delay); put16(b, 42, m.n); b.set(m.ev, 44);
+    return b;
+  });
+  const total = 2 + parts.reduce((a, p) => a + p.length, 0);
+  if (total > MAC_MAX) throw Err(T(`巨集表 ${total} bytes，超過 ${MAC_MAX}`, `Macro table ${total} bytes, over ${MAC_MAX}`));
+  const t = new Uint8Array(total);
+  put16(t, 0, total);
+  let o = 2;
+  parts.forEach(p => { t.set(p, o); o += p.length; });
+  return t;
+}
+function macShow() {
+  const tb = $('apMacTable').tBodies[0];
+  tb.innerHTML = '';
+  loadEditor();                        // the key editor's macro drop-down
+  macBlocks.sort((a, b) => a.idx - b.idx).forEach(m => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = '<td></td><td></td><td></td><td></td><td></td><td class="desc"></td><td><button class="btn small"></button></td>';
+    tr.cells[0].textContent = m.idx;
+    tr.cells[1].textContent = m.name;
+    put(tr.cells[2], J(`${m.type} `, MAC_TYPES[m.type] || '?'));
+    tr.cells[3].textContent = m.cnt;
+    tr.cells[4].textContent = m.delay;
+    tr.cells[5].textContent = evSplit(m.ev, m.n).map(evText).join('; ');
+    const btn = tr.querySelector('button');
+    put(btn, T('編輯', 'Edit'));
+    btn.onclick = () => {
+      $('mIdx').value = m.idx; $('mName').value = m.name; $('mType').value = m.type;
+      $('mCnt').value = m.cnt; $('mDelay').value = m.delay;
+      $('mEvents').value = evSplit(m.ev, m.n).map(evText).join('\n');
+    };
+    tb.appendChild(tr);
+  });
+  let size;
+  try { size = `${macBuild().length} bytes`; } catch (e) { size = T('超過上限', 'over the limit'); }
+  put($('macInfo'), J(T(`${macBlocks.length} 個巨集，`, `${macBlocks.length} macros, `), size));
+}
+
+async function getMac() {
+  const page = async p => (await request([0x1A, 0x85, 0x00, p], r => is(0x85)(r) && r[3] === p)).slice(4, 64);
+  const first = await page(0);
+  let total = le16(first, 0);
+  if (total < 2 || total === 0xFFFF) total = 2;
+  if (total > MAC_MAX) {               // not a table: the mouse plays nothing from it either
+    log(T(`巨集表頭長度 ${total} 超過 ${MAC_MAX}，視為空表`, `Macro table header length ${total} is over ${MAC_MAX}; taken as empty`), 'err');
+    total = 2;
+  }
+  const t = new Uint8Array(Math.ceil(total / 60) * 60);
+  t.set(first, 0);
+  for (let p = 1; p * 60 < total; p++) t.set(await page(p), p * 60);
+  macBlocks = [];
+  for (let o = 2; o + 44 <= total;) {
+    const len = le16(t, o);
+    if (len < 44 || len === 0xFFFF || o + len > total) break;
+    const b = t.slice(o, o + len);
+    macBlocks.push({ idx: b[4], type: b[5], cnt: le16(b, 2), delay: le16(b, 40), name: nameOf(b.slice(6, 40)), n: le16(b, 42), ev: b.slice(44) });
+    o += len;
+  }
+  macShow();
+  apDone('mac');
+}
+$('apGetMac').onclick = () => act(getMac);
+$('apMacPut').onclick = () => act(async () => {
+  if (!macBlocks) throw Err(T('先按「讀取巨集表」', 'Press “Read macros” first'));
+  const ev = evParse($('mEvents').value);
+  const idx = parseInt($('mIdx').value, 10);
+  if (!(idx >= 0 && idx <= 255)) throw Err(T('序號要 0～255', 'Index must be 0–255'));
+  const clamp = id => Math.max(0, Math.min(65535, parseInt($(id).value, 10) || 0));
+  const m = { idx, type: +$('mType').value, cnt: clamp('mCnt'), delay: clamp('mDelay'), name: $('mName').value, n: ev.length, ev: Uint8Array.from(ev.flat()) };
+  macBlocks = macBlocks.filter(b => b.idx !== idx).concat([m]);
+  macShow();
+  log(T(`巨集 #${idx} 已放進表（還沒寫入滑鼠）`, `Macro #${idx} is in the table (not written to the mouse yet)`), 'ok');
+});
+$('apMacDel').onclick = () => act(async () => {
+  if (!macBlocks) throw Err(T('先按「讀取巨集表」', 'Press “Read macros” first'));
+  const idx = parseInt($('mIdx').value, 10);
+  macBlocks = macBlocks.filter(b => b.idx !== idx);
+  macShow();
+});
+$('apSetMac').onclick = () => act(async () => {
+  const t = macBuild();
+  for (let p = 0; p * 60 < t.length; p++) {
+    await request([0x1A, 0x05, 0x00, p, ...t.slice(p * 60, p * 60 + 60)], r => is(0x05)(r) && r[3] === p);
+  }
+  await request([0x1A, 0xAC, 0xF4, 0x00], is(0xAC));
+  log(T(`巨集表已寫入並存檔（${t.length} bytes），讀回確認`, `Macro table written and saved (${t.length} bytes); reading back`), 'ok');
+  await getMac();
+});
+$('apClrMac').onclick = () => act(async () => {
+  if (!await ask({ title: T('清除全部巨集', 'Clear all macros'), note: T('之後要按「存檔」才會寫進 flash。', 'Press “Save” afterwards to keep it in flash.'),
+    yes: T('清除', 'Clear'), danger: true })) return;
+  await request([0x1A, 0xAB, 0xF4, prof()], is(0xAB));
+  await getMac();
+});
+
+// ── AP: key editor, drop-downs over one key's 4 bytes ───────────────────────
+const MODS = ['L-Ctrl', 'L-Shift', 'L-Alt', 'L-Win', 'R-Ctrl', 'R-Shift', 'R-Alt', 'R-Win'];
+const MBTNS = [T('左鍵', 'Left'), T('右鍵', 'Right'), T('中鍵', 'Middle'), T('後退', 'Back'), T('前進', 'Forward')];   // bits 0..4 (BTN_MASK 0x1F)
+const MEDIA = [[0x00CD, T('播放／暫停', 'Play / pause')], [0x00B5, T('下一首', 'Next track')], [0x00B6, T('上一首', 'Previous track')],
+  [0x00B7, T('停止', 'Stop')], [0x00E2, T('靜音', 'Mute')], [0x00E9, T('音量＋', 'Volume +')], [0x00EA, T('音量－', 'Volume −')],
+  [0x0183, T('媒體播放器', 'Media player')], [0x018A, T('郵件', 'Mail')], [0x0192, T('計算機', 'Calculator')], [0x0194, T('我的電腦', 'My computer')],
+  [0x0221, T('搜尋', 'Search')], [0x0223, T('瀏覽器首頁', 'Browser home')], [0x0224, T('上一頁', 'Browser back')], [0x0225, T('下一頁', 'Browser forward')],
+  [0x0226, T('停止載入', 'Browser stop')], [0x0227, T('重新整理', 'Refresh')], [0x022A, T('我的最愛', 'Favourites')],
+  [0x006F, T('亮度＋', 'Brightness +')], [0x0070, T('亮度－', 'Brightness −')]];
+const STEP_OPS = [[1, T('＋', '+')], [2, T('－', '−')], [3, T('＋循環', '+ cycle')], [4, T('指定', 'Set')]];
+const HID_KEYS = (() => {
+  const m = [[0, T('（無）', '(none)')]];
+  for (let i = 0; i < 26; i++) m.push([0x04 + i, String.fromCharCode(65 + i)]);
+  '1234567890'.split('').forEach((c, i) => m.push([0x1E + i, c]));
+  m.push([0x28, 'Enter'], [0x29, 'Esc'], [0x2A, 'Backspace'], [0x2B, 'Tab'], [0x2C, 'Space'], [0x2D, '-'], [0x2E, '='],
+    [0x2F, '['], [0x30, ']'], [0x31, '\\'], [0x32, T('#（非美式）', '# (non-US)')], [0x33, ';'], [0x34, "'"], [0x35, '`'], [0x36, ','],
+    [0x37, '.'], [0x38, '/'], [0x39, 'Caps Lock']);
+  for (let i = 0; i < 12; i++) m.push([0x3A + i, 'F' + (i + 1)]);
+  m.push([0x46, 'Print Screen'], [0x47, 'Scroll Lock'], [0x48, 'Pause'], [0x49, 'Insert'], [0x4A, 'Home'],
+    [0x4B, 'Page Up'], [0x4C, 'Delete'], [0x4D, 'End'], [0x4E, 'Page Down'], [0x4F, '→'], [0x50, '←'], [0x51, '↓'],
+    [0x52, '↑'], [0x53, 'Num Lock'], [0x54, T('數字鍵 /', 'Keypad /')], [0x55, T('數字鍵 *', 'Keypad *')], [0x56, T('數字鍵 -', 'Keypad -')],
+    [0x57, T('數字鍵 +', 'Keypad +')], [0x58, T('數字鍵 Enter', 'Keypad Enter')]);
+  for (let i = 0; i < 9; i++) m.push([0x59 + i, T('數字鍵 ' + (i + 1), 'Keypad ' + (i + 1))]);
+  m.push([0x62, T('數字鍵 0', 'Keypad 0')], [0x63, T('數字鍵 .', 'Keypad .')], [0x64, T('\\（非美式）', '\\ (non-US)')], [0x65, T('選單鍵', 'Menu')]);
+  for (let i = 0; i < 12; i++) m.push([0x68 + i, 'F' + (i + 13)]);
+  return m;
+})();
+const KE_CATS = [['off', T('停用', 'Disabled')], ['mouse', T('滑鼠鍵', 'Mouse button')], ['wheel', T('滾輪', 'Wheel')], ['kbd', T('鍵盤', 'Keyboard')],
+  ['media', T('多媒體', 'Media')], ['dpi', 'DPI'], ['rate', T('回報率', 'Report rate')], ['profile', 'Profile'],
+  ['macro', T('巨集（按鍵自己的次數與類型 09）', 'Macro (count and type on the key, 09)')],
+  ['macro2', T('巨集（用巨集裡的次數與類型 0C）', 'Macro (count and type from the macro, 0C)')],
+  ['fire', T('火力鍵', 'Rapid fire')], ['raw', T('其他（只能改 16 進位）', 'Other (hex only)')]];
+const KE_DEFAULT = { off: [0, 0, 0, 0], mouse: [1, 0, 0xF0, 0], wheel: [1, 0, 0xF8, 1], kbd: [0, 0, 0x04, 0],
+  media: [3, 0, 0xCD, 0], dpi: [7, 0, 3, 0], rate: [5, 0, 3, 0], profile: [8, 0, 3, 0], macro: [9, 1, 0, 1],
+  macro2: [0x0C, 0, 0, 0], fire: [0x10, 1, 10, 50] };
+let keSel = 0;
+
+// 4 bytes -> { cat, field values }.
+function keDecode([t, b1, b2, b3]) {
+  if (t === 0x00) return (b1 | b2 | b3) === 0 ? { cat: 'off' } : { cat: 'kbd', mod: b1, key: b2, key2: b3 };
+  if (t === 0x01 && b2 === 0xF8) return { cat: 'wheel', mul: s8(b3) };
+  if (t === 0x01 && MOUSE_FN.some(([v]) => v === b2)) return { cat: 'mouse', fn: b2 };
+  if (t === 0x03) return { cat: 'media', usage: b2 | (b3 << 8) };
+  if (t === 0x05 || t === 0x07 || t === 0x08) return { cat: { 5: 'rate', 7: 'dpi', 8: 'profile' }[t], op: b2, arg: b3 };
+  if (t === 0x09) return { cat: 'macro', cnt: b1, idx: b2, type: b3 };
+  if (t === 0x0C) return { cat: 'macro2', idx: b2 };
+  if (t >= 0x10 && t <= 0x3F) return { cat: 'fire', kind: t >> 4, val: b1, n: ((t & 0x0F) << 8) | b2, ms: b3 };
+  return { cat: 'raw' };
+}
+// { cat, field values } -> 4 bytes (null = leave the bytes alone).
+function keEncode(v) {
+  switch (v.cat) {
+  case 'off': return [0, 0, 0, 0];
+  case 'kbd': return [0, v.mod, v.key, v.key2];
+  case 'mouse': return [1, 0, v.fn, 0];
+  case 'wheel': return [1, 0, 0xF8, v.mul & 0xFF];
+  case 'media': return [3, 0, v.usage & 0xFF, v.usage >> 8];
+  case 'rate': case 'dpi': case 'profile':
+    return [{ rate: 5, dpi: 7, profile: 8 }[v.cat], 0, v.op, v.op === 4 ? v.arg : 0];
+  case 'macro': return [9, v.cnt, v.idx, v.type];
+  case 'macro2': return [0x0C, 0, v.idx, 0];
+  case 'fire': return [(v.kind << 4) | (v.n >> 8), v.val, v.n & 0xFF, Math.max(1, v.ms)];
+  default: return null;
+  }
+}
+// A macro index: a drop-down of the read table when there is one.
+function macIdxField() {
+  if (!macBlocks || !macBlocks.length) return { min: 0, max: 255 };
+  return { opts: macBlocks.slice().sort((a, b) => a.idx - b.idx).map(m => [m.idx, `#${m.idx} ${m.name || ''}`]) };
+}
+// The fields each category shows; rebuild = the layout depends on it.
+function keFields(v) {
+  const keyOpts = HID_KEYS.slice(1);
+  const pick = T('選擇按鍵', 'Key');
+  switch (v.cat) {
+  case 'kbd': return [{ k: 'mod', label: T('修飾鍵', 'Modifiers'), bits: MODS }, { k: 'key', label: T('按鍵', 'Key'), opts: HID_KEYS },
+    { k: 'key2', label: T('第二個鍵（同時送出）', 'Second key (sent together)'), opts: HID_KEYS }];
+  case 'mouse': return [{ k: 'fn', label: T('按鍵', 'Button'), opts: MOUSE_FN }];
+  case 'wheel': return [{ k: 'mul', label: T('數值（正負＝方向）', 'Amount (sign = direction)'), min: -127, max: 127 }];
+  case 'media': return [{ k: 'usage', label: T('功能', 'Function'), opts: MEDIA, fmt: h4 }];
+  case 'dpi': return [{ k: 'op', label: T('動作', 'Action'), opts: STEP_OPS, rebuild: true },
+    ...(v.op === 4 ? [{ k: 'arg', label: T('段', 'Level'), opts: [0, 1, 2, 3, 4, 5].map(i => [i, T(`第 ${i + 1} 段`, `Level ${i + 1}`)]) }] : [])];
+  case 'rate': return [{ k: 'op', label: T('動作', 'Action'), opts: STEP_OPS, rebuild: true },
+    ...(v.op === 4 ? [{ k: 'arg', label: T('回報率', 'Rate'), opts: RATES.map((r, i) => [i, r]) }] : [])];
+  case 'profile': return [{ k: 'op', label: T('動作', 'Action'), opts: STEP_OPS, rebuild: true },
+    ...(v.op === 4 ? [{ k: 'arg', label: 'Profile', opts: [0, 1, 2, 3, 4].map(i => [i, String(i)]) }] : [])];
+  case 'macro': return [{ k: 'idx', label: T('巨集', 'Macro'), ...macIdxField() }, { k: 'cnt', label: T('次數（0 = 1）', 'Count (0 = 1)'), min: 0, max: 255 },
+    { k: 'type', label: T('類型', 'Type'), opts: [1, 2, 3, 4, 5, 6].map(i => [i, J(`${i} `, MAC_TYPES[i])]) }];
+  case 'macro2': return [{ k: 'idx', label: T('巨集', 'Macro'), ...macIdxField() }];
+  case 'fire': return [{ k: 'kind', label: T('選擇動作', 'Kind'), opts: [[1, T('滑鼠', 'Mouse')], [2, T('修飾鍵', 'Modifier')], [3, T('鍵盤', 'Keyboard')]], rebuild: true },
+    v.kind === 1 ? { k: 'val', label: pick, bits: MBTNS } : v.kind === 2 ? { k: 'val', label: pick, bits: MODS } : { k: 'val', label: pick, opts: keyOpts },
+    { k: 'n', label: T('次數（0 = 按住持續發）', 'Count (0 = while held)'), min: 0, max: 4095 }, { k: 'ms', label: T('速度 ms', 'Interval ms'), min: 1, max: 255 }];
+  default: return [];
+  }
+}
+function selectKey(i) {
+  keSel = i;
+  document.querySelectorAll('#apKeyTable tr.sel').forEach(r => r.classList.remove('sel'));
+  $('apKr' + i).classList.add('sel');
+  loadEditor();
+}
+function loadEditor() {
+  put($('keTitle'), J(`#${keSel} `, KEY_NAMES[keSel]));
+  const kb = keyBytes(keSel);
+  const v = kb.some(Number.isNaN) ? { cat: 'raw' } : keDecode(kb);
+  const cat = $('keCat');
+  if (!cat.options.length) {
+    KE_CATS.forEach(([c, n]) => { const o = new Option('', c); put(o, n); cat.add(o); });
+    cat.onchange = () => {
+      if (cat.value !== 'raw') keWrite(KE_DEFAULT[cat.value]);
+      loadEditor();
+    };
+  }
+  cat.value = v.cat;
+  const box = $('keFields');
+  box.textContent = '';
+  if (v.cat === 'raw') {
+    const p = document.createElement('p');
+    p.className = 'note';
+    p.textContent = tx(T('這個類型沒有選單（系統鍵、特殊鍵、快捷鍵等），請直接改左邊的 16 進位。', 'This kind has no menu (system, special and shortcut keys); edit the hex bytes on the left.'));
+    box.appendChild(p);
+    return;
+  }
+  for (const f of keFields(v)) {
+    const row = document.createElement('div');
+    row.className = 'row';
+    if (f.bits) {
+      const el = document.createElement('span');
+      el.className = 'checks';
+      f.bits.forEach((n, b) => {
+        const l = document.createElement('label');
+        const c = document.createElement('input');
+        c.type = 'checkbox';
+        c.checked = !!(v[f.k] & (1 << b));
+        c.onchange = () => { v[f.k] = c.checked ? (v[f.k] | (1 << b)) : (v[f.k] & ~(1 << b)); keCommit(v, f); };
+        l.append(c, ' ' + tx(n));
+        el.appendChild(l);
+      });
+      row.append(tx(f.label) + (lang === 'en' ? ': ' : '：'), el);
+      box.appendChild(row);
+      continue;
+    }
+    const lab = document.createElement('label');
+    lab.append(tx(f.label) + ' ');
+    let el;
+    if (f.opts) {
+      el = document.createElement('select');
+      const fmt = f.fmt || h2;
+      const opts = f.opts.some(([x]) => x === v[f.k]) ? f.opts
+        : f.opts.concat([[v[f.k], T(`${fmt(v[f.k])}（未列出）`, `${fmt(v[f.k])} (not listed)`)]]);
+      opts.forEach(([x, n]) => el.add(new Option(tx(n), String(x))));
+      el.value = String(v[f.k]);
+      el.onchange = () => { v[f.k] = parseInt(el.value, 10); keCommit(v, f); };
+    } else {
+      el = document.createElement('input');
+      el.type = 'number';
+      el.min = f.min; el.max = f.max;
+      el.value = v[f.k];
+      el.onchange = () => {
+        const x = parseInt(el.value, 10);
+        if (Number.isNaN(x) || x < f.min || x > f.max) {
+          log(J(f.label, T(`：${f.min}～${f.max}`, `: ${f.min}–${f.max}`)), 'err');
+          el.value = v[f.k];
+          return;
+        }
+        v[f.k] = x;
+        keCommit(v, f);
+      };
+    }
+    lab.appendChild(el);
+    row.appendChild(lab);
+    box.appendChild(row);
+  }
+}
+function keWrite(bytes) {
+  bytes.forEach((x, k) => { $(`apK${keSel}_${k}`).value = h2(x); });
+  describe(keSel);
+}
+function keCommit(v, f) {
+  if (v.cat === 'fire' && f.k === 'kind') v.val = v.kind === 3 ? 0x04 : 1;   // bits / a usage do not carry across kinds
+  if (f.k === 'op' && v.op === 4 && v.arg === undefined) v.arg = 0;
+  const b = keEncode(v);
+  if (b) keWrite(b);
+  if (f.rebuild) loadEditor();
+}
+selectKey(0);
+langHooks.push(loadEditor);
+
+// ── AP: raw command ─────────────────────────────────────────────────────────
+$('btnRaw').onclick = () => act(async () => {
+  const parts = $('rawHex').value.trim().split(/[\s,]+/).filter(Boolean);
+  if (!parts.length) throw Err(T('請輸入 16 進位位元組', 'Enter hex bytes'));
+  const bytes = parts.map(p => {
+    const v = parseInt(p, 16);
+    if (Number.isNaN(v) || v < 0 || v > 255) throw Err(T('不是位元組：' + p, 'Not a byte: ' + p));
+    return v;
+  });
+  if (bytes.length > 64) throw Err(T('最多 64 bytes', 'At most 64 bytes'));
+  if (!pktLog()) log('TX ' + hexs(bytes, 24), 'system');
+  const r = await request(bytes, x => x[0] === bytes[0] && (bytes.length < 2 || x[1] === bytes[1]));
+  if (!pktLog()) log('RX ' + hexs(r, 24));
+});
+
 $('btnClear').onclick = () => { $('log').textContent = ''; };
 
 // ── Start ───────────────────────────────────────────────────────────────────
 card('dev', 'empty', T('未連接', 'Not connected'),
-  T('滑鼠請用 USB 線連接電腦（藍牙不能更新、不能產測）；dongle 直接插上。', 'Connect the mouse with its USB cable (no update or test over Bluetooth); plug the dongle in.'));
+  T('滑鼠請用 USB 線連接電腦（藍牙不能更新、產測、設定）；dongle 直接插上。', 'Connect the mouse with its USB cable (no update, test or settings over Bluetooth); plug the dongle in.'));
 clearImage(T('連接裝置後，自動選網站上這個裝置的最新韌體。', 'After connecting, the newest firmware for the device is picked from the site.'));
 status(T('尚未連接裝置', 'No device connected'));
 mpState(false);
