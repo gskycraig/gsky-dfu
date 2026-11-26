@@ -1,0 +1,36 @@
+{
+  "images": [
+    {
+      "product": "Ex02 Mouse",
+      "version": "0.95.0+0",
+      "file": "Ex02_Mouse_v0.95.0_0.bin",
+      "bytes": 325956,
+      "sha256": "5230aeaa5e5a636ab189290aae2de7f3749b828575473d7b09a9fc431af8d02d",
+      "date": "2026-11-26"
+    },
+    {
+      "product": "GM851 Dongle",
+      "version": "0.95.0+0",
+      "file": "GM851_Dongle_v0.95.0_0.bin",
+      "bytes": 127432,
+      "sha256": "8a91cf157c086252b393e877e51099abd24de8ed407d11b7fcc5d42ac3f3e9fd",
+      "date": "2026-11-26"
+    },
+    {
+      "product": "GM851 Mouse",
+      "version": "0.95.0+0",
+      "file": "GM851_Mouse_v0.95.0_0.bin",
+      "bytes": 337488,
+      "sha256": "5ec18f9ddd64f495926a16a99a84fd38814cb90a5b6244efb24f9255656bd0d4",
+      "date": "2026-11-26"
+    },
+    {
+      "product": "GM855 Dongle",
+      "version": "0.9.0+0",
+      "file": "GM855_Dongle_v0.9.0_0.bin",
+      "bytes": 127160,
+      "sha256": "66b99c1e5c09976c3768183d6b21dedd06c1e4929e988775435ecaedeea653be",
+      "date": "2026-11-26"
+    }
+  ]
+}

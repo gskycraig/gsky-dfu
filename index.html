@@ -1,0 +1,1485 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GSKY DFU 更新</title>
+<!--
+  GSKY USB DFU + production test (WebHID).
+  DFU - the same protocol and checks as dfu_hid_update.py:
+    1A F1 01 00 size(LE32)  start   -> 1A F1 01 st
+    1A F1 02 seq data[60]   data    -> 1A F1 02 st seq   (a lost reply: the SAME seq again)
+    1A F1 03                end     -> 1A F1 03 st       (reboot ~200 ms later)
+    1A F1 FF                abort
+    1A AA 01 (mouse)        query   -> d[4] previous usable, d[5..16] running, d[17..28] previous
+    1A AA 55 (mouse)        roll back
+    1A 8A 04 (dongle)       its version, BCD
+  The image must carry the connected device's USB product string (a mouse image never goes
+  to the dongle).
+  Production test - the AD commands of ptx/src/test/mp_test.c, as ap_web.html sends them:
+    AD FF 01/02/03 MP mode on / off / reset, AD 02 LED, AD 04 key (from the mouse),
+    AD 01 RF test (wired only), AD 03 MAC / product info, AD 05 pairing, AD FE 01/FF reset,
+    1A F2 the dongle's own lamps.
+  Style after begin0808.github.io/esp32Lab ("mat" / "blocks"); "neon" / "metal" are dark ones.
+  The style and the language (zh / en) are picked in the settings popover (top right), kept in
+  localStorage; no saved language = the browser's (zh*, else en).
+-->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Huninn&family=Noto+Sans+TC:wght@400;600;700;900&display=swap" rel="stylesheet">
+<style>
+  :root {
+    color-scheme: light;
+    --font-system: "Noto Sans TC", "Microsoft JhengHei", system-ui, sans-serif;
+    --font-code: Consolas, "Cascadia Mono", "Noto Sans TC", "Microsoft JhengHei", monospace;
+    --surface: #fff; --text: #14211d; --muted: #4d5b56; --border: #b9c4bf;
+    --danger: #b3261e; --danger-bg: #fde8e6; --success: #17692f; --success-bg: #e8f5ec;
+    --warn-bg: #fff4d6; --warn-text: #5c4300; --busy: #e08e00; --focus: #1a73e8; --link: #0a55ad;
+  }
+  :root, :root[data-style=mat] {
+    --font-ui: var(--font-system); --font-display: var(--font-system);
+    --page-bg: #17705f;
+    --page-pattern: linear-gradient(#ffffff26 1px, transparent 1px), linear-gradient(90deg, #ffffff26 1px, transparent 1px);
+    --page-pattern-size: 24px 24px;
+    --page-title: #fff; --page-text: #fff; --page-muted: #e3f5ef; --page-link: #fff;
+    --status-idle: #b9d6cd; --status-ready: #ffd23f;
+    --btn-bg: #fff; --btn-text: #14211d; --btn-border: 0 solid transparent; --btn-radius: 4px; --btn-shadow: 0 2px 0 #0b3d33;
+    --go-bg: #ffd23f; --go-text: #14211d;
+    --panel-border: 0 solid transparent; --panel-radius: 6px; --panel-shadow: 0 4px 0 #0b3d33;
+    --head-bg: #ffd23f; --head-alt-bg: #ffd23f; --head-text: #14211d; --head-border: 0 solid transparent;
+    --tab-on-bg: #fff; --tab-on-border: 0 solid transparent; --tab-on-shadow: 0 2px 0 #0b3d33;
+    --monitor-bg: #17201d; --monitor-text: #ffe6a6; --monitor-system: #9fd2ff; --monitor-ok: #8fe3a5; --monitor-err: #ff9b8f;
+    --bar: #17705f;
+  }
+  :root[data-style=blocks] {
+    --font-ui: "Huninn", var(--font-system); --font-display: "Huninn", var(--font-system);
+    --page-bg: #a9dcff; --page-pattern: radial-gradient(#fff9 3px, transparent 3.5px); --page-pattern-size: 26px 26px;
+    --page-title: #101218; --page-text: #101218; --page-muted: #1d2733; --page-link: #0a3d91;
+    --status-idle: #5a6170; --status-ready: #137a36;
+    --btn-bg: #fff; --btn-text: #101218; --btn-border: 2.5px solid #101218; --btn-radius: 12px; --btn-shadow: 3px 3px 0 #101218;
+    --go-bg: #ffd400; --go-text: #101218;
+    --panel-border: 3px solid #101218; --panel-radius: 16px; --panel-shadow: 6px 6px 0 #101218;
+    --head-bg: #ffb3c9; --head-alt-bg: #b9ef9f; --head-text: #101218; --head-border: 3px solid #101218;
+    --tab-on-bg: #fff; --tab-on-border: 2.5px solid #101218; --tab-on-shadow: 2px 2px 0 #101218;
+    --monitor-bg: #1e2159; --monitor-text: #fff; --monitor-system: #a8e1ff; --monitor-ok: #b9ef9f; --monitor-err: #ffb3c9;
+    --bar: #1e2159;
+  }
+  /* "neon" and "metal": dark, after the ESP32-vs-Pico poster the user sent (2026-11-26);
+     metal = neon with brushed-metal lines. */
+  :root[data-style=neon], :root[data-style=metal] {
+    color-scheme: dark;
+    --font-ui: var(--font-system); --font-display: "Bahnschrift", var(--font-system);
+    --surface: #0b1826; --text: #e3f2fb; --muted: #8aa7bb; --border: #1f3a50;
+    --danger: #ff6b81; --danger-bg: #3a1520; --success: #4dffa0; --success-bg: #0f2e20;
+    --warn-bg: #33270b; --warn-text: #ffd27a; --busy: #ffb020; --focus: #22d3ff; --link: #7dd3fc;
+    --page-bg: #050b14;
+    --page-pattern: radial-gradient(900px 500px at 0% 0%, #22d3ff30, transparent 60%), radial-gradient(900px 520px at 100% 100%, #39ff8824, transparent 60%),
+                    linear-gradient(#22d3ff10 1px, transparent 1px), linear-gradient(90deg, #22d3ff10 1px, transparent 1px);
+    --page-pattern-size: auto, auto, 48px 48px, 48px 48px;
+    --page-title: #e8f6ff; --page-text: #e3f2fb; --page-muted: #8aa7bb; --page-link: #7dd3fc;
+    --status-idle: #4f6a7e; --status-ready: #39ff88;
+    --btn-bg: #0f2233; --btn-text: #e3f2fb; --btn-border: 1px solid #22d3ff8c; --btn-radius: 0; --btn-shadow: none;
+    --go-bg: linear-gradient(90deg, #16c25e, #39ff88); --go-text: #031b0c;
+    --panel-border: 1.5px solid #22d3ff80; --panel-radius: 0; --panel-shadow: 0 0 18px #22d3ff33;
+    --head-bg: linear-gradient(90deg, #0e2a40, #0b1826); --head-alt-bg: linear-gradient(90deg, #0e3324, #0b1826); --head-text: #e8f6ff; --head-border: 1px solid #22d3ff55;
+    --tab-on-bg: linear-gradient(90deg, #22d3ff, #7dfcff); --tab-on-border: 0 solid transparent; --tab-on-shadow: 0 0 12px #22d3ff88;
+    --monitor-bg: #040c16; --monitor-text: #9cc6dc; --monitor-system: #22d3ff; --monitor-ok: #39ff88; --monitor-err: #ff6b81;
+    --bar: #22d3ff;
+    --metal: linear-gradient(135deg, #55606b 0%, #f5f9fc 16%, #8e99a4 30%, #2b333b 48%, #c8d2db 64%, #fff 76%, #77828d 90%, #3a434c 100%);
+    --metal-v: linear-gradient(180deg, #fff, #c3ccd5 40%, #6f7a85 55%, #d9e1e8 80%, #9aa5b0);
+  }
+  :root[data-style=metal] {
+    --page-pattern: radial-gradient(900px 500px at 0% 0%, #22d3ff22, transparent 60%), radial-gradient(900px 520px at 100% 100%, #39ff881c, transparent 60%),
+                    linear-gradient(#bed0e012 1px, transparent 1px), linear-gradient(90deg, #bed0e012 1px, transparent 1px);
+    --surface: #0d1823; --border: #ffffff1f; --focus: #e6eef5;
+    --head-bg: linear-gradient(180deg, #1a2733, #0f1a25); --head-alt-bg: linear-gradient(180deg, #1a2733, #0f1a25);
+    --tab-on-bg: var(--metal-v); --tab-on-shadow: 0 0 10px #ffffff40;
+    --panel-shadow: 0 10px 24px #0009;
+  }
+  :root:is([data-style=neon], [data-style=metal]) .brand h1 { text-shadow: 0 0 12px #22d3ff99; letter-spacing: .5px; }
+  :root:is([data-style=neon], [data-style=metal]) .brand svg rect { fill: #06121f; stroke: #22d3ff; }
+  :root:is([data-style=neon], [data-style=metal]) .brand svg g { stroke: #22d3ff; }
+  :root:is([data-style=neon], [data-style=metal]) .brand svg > path { stroke: #39ff88; }
+  :root:is([data-style=neon], [data-style=metal]) .btn { clip-path: polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%, 0 8px); }
+  :root:is([data-style=neon], [data-style=metal]) .btn.small { clip-path: polygon(5px 0, 100% 0, 100% calc(100% - 5px), calc(100% - 5px) 100%, 0 100%, 0 5px); }
+  :root:is([data-style=neon], [data-style=metal]) .btn.primary { border-color: transparent; box-shadow: 0 0 14px #39ff8866; }
+  :root:is([data-style=neon], [data-style=metal]) .btn.danger { background: #ff4d6d1a; color: #ff8aa0; border: 1px solid #ff4d6db3; }
+  :root:is([data-style=neon], [data-style=metal]) .btn:hover:not(:disabled) { filter: brightness(1.2); }
+  :root:is([data-style=neon], [data-style=metal]) .panel-body .btn { box-shadow: none; }
+  :root:is([data-style=neon], [data-style=metal]) .panel-body .btn.primary { box-shadow: 0 0 14px #39ff8866; }
+  :root:is([data-style=neon], [data-style=metal]) .tab { color: #a9b6c2; }
+  :root:is([data-style=neon], [data-style=metal]) .tab:hover { background: #ffffff14; }
+  :root:is([data-style=neon], [data-style=metal]) .tab[aria-selected=true] { color: #06141e; }
+  :root:is([data-style=neon], [data-style=metal]) :is(select, input[type=text], input[type=number]) { background: #08131f; border-color: #22d3ff55; border-radius: 0; }
+  :root:is([data-style=neon], [data-style=metal]) .key-led.down::before { background: #39ff88; box-shadow: 0 0 10px #39ff88; }
+  :root:is([data-style=neon], [data-style=metal]) .big { text-shadow: 0 0 10px #4dffa066; }
+  /* metal: the lines are brushed metal instead of neon */
+  :root[data-style=metal] .brand h1 { text-shadow: 0 2px 0 #000a, 0 0 10px #ffffff30; }
+  :root[data-style=metal] .brand svg rect, :root[data-style=metal] .brand svg g { stroke: #d9e1e8; }
+  :root[data-style=metal] .panel, :root[data-style=metal] .dialog, :root[data-style=metal] .settings {
+    border: 2px solid transparent; background: linear-gradient(var(--surface), var(--surface)) padding-box, var(--metal) border-box;
+  }
+  :root[data-style=metal] .panel-head { border-bottom: 2px solid; border-image: var(--metal) 1; }
+  :root[data-style=metal] .btn { border: 1.5px solid; border-image: var(--metal) 1; }
+  :root[data-style=metal] .btn.primary { border: 0; box-shadow: 0 0 12px #39ff8873, inset 0 1px 0 #ffffffb3; }
+  :root[data-style=metal] .btn.danger { border-image: linear-gradient(135deg, #6b3440, #ffd0d9 20%, #a35565 40%, #3a1820 55%, #ffb3c1 75%, #7a3a48) 1; }
+  :root[data-style=metal] .tab[aria-selected=true] { border: 0; }
+  :root[data-style=metal] :is(select, input[type=text], input[type=number]) { border: 1px solid; border-image: var(--metal) 1; }
+  :root[data-style=metal] .progress progress { accent-color: #c8d2db; }
+
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    margin: 0; min-height: 100vh; display: flex; flex-direction: column;
+    background-color: var(--page-bg); background-image: var(--page-pattern); background-size: var(--page-pattern-size);
+    color: var(--page-text); font-family: var(--font-ui); font-size: 13px;
+  }
+
+  .topbar { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 12px; padding: 8px 16px; }
+  .brand { display: flex; align-items: center; gap: 12px; }
+  .brand h1 { margin: 0; color: var(--page-title); font-family: var(--font-display); font-size: 20px; font-weight: 900; }
+  .edition { display: inline-block; padding: 1px 10px; border: 1px solid #fff; border-radius: 6px; background: #2b5f8e; color: #fff; font-size: 13px; font-weight: 700; white-space: nowrap; vertical-align: middle; }
+  .version { display: inline-block; padding: 1px 6px; border: 1px solid; border-radius: 6px; font-size: 12px; font-weight: 600; opacity: .85; vertical-align: middle; }
+  .status { margin: 2px 0 0; color: var(--page-muted); font-size: 12px; }
+  .status::before { content: ""; display: inline-block; width: 9px; height: 9px; margin-right: 6px; border-radius: 50%; background: var(--status-idle); }
+  .status[data-state=ready]::before { background: var(--status-ready); }
+  .status[data-state=busy]::before { background: var(--busy); animation: blink 1s steps(2) infinite; }
+  .status[data-state=error]::before { background: var(--danger); }
+  @keyframes blink { 50% { opacity: .25; } }
+  .actions, .row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+
+  .btn {
+    padding: 8px 14px; border: var(--btn-border); border-radius: var(--btn-radius); background: var(--btn-bg);
+    box-shadow: var(--btn-shadow); color: var(--btn-text); font: inherit; font-family: var(--font-display);
+    cursor: pointer; text-decoration: none; white-space: nowrap;
+  }
+  .panel-body .btn { box-shadow: var(--btn-shadow), 0 0 0 1px var(--border); }
+  :root[data-style=blocks] .panel-body .btn { box-shadow: var(--btn-shadow); }
+  .btn:hover:not(:disabled) { filter: brightness(.93); }
+  .btn:active:not(:disabled) { transform: translateY(1px); }
+  .btn:focus-visible, select:focus-visible, input:focus-visible, .tab:focus-visible { outline: 3px solid var(--focus); outline-offset: 1px; }
+  .btn:disabled { opacity: .5; cursor: not-allowed; }
+  .btn.primary { background: var(--go-bg); color: var(--go-text); font-weight: 700; }
+  .btn.danger { background: var(--danger); color: #fff; }
+  .btn.small { padding: 5px 10px; font-size: 11px; }
+  .swatch { width: 12px; height: 12px; border-radius: 50%; display: inline-block; vertical-align: -1px; margin-right: 6px; border: 1px solid #0003; }
+  .topbar { position: relative; }
+  .settings {
+    position: absolute; top: calc(100% - 2px); right: 16px; z-index: 20; width: min(400px, calc(100vw - 32px)); padding: 12px 16px 14px;
+    background: var(--surface); color: var(--text); border: var(--panel-border); border-radius: var(--panel-radius);
+    box-shadow: var(--panel-shadow), 0 12px 28px #0006;
+  }
+  .settings[hidden] { display: none; }
+  .settings-head { display: flex; justify-content: space-between; align-items: center; font-family: var(--font-display); font-size: 16px; }
+  .set-group { margin: 10px 0 0; padding: 0; border: 0; min-width: 0; }
+  .set-group legend { padding: 0; margin-bottom: 6px; color: var(--muted); font-size: 11px; letter-spacing: 2px; }
+  .themes { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+  .theme { display: grid; gap: 4px; justify-items: center; font-size: 12px; color: var(--muted); cursor: pointer; }
+  .theme input, .seg input { position: absolute; opacity: 0; pointer-events: none; }
+  .pv { width: 100%; height: 48px; display: flex; flex-direction: column; gap: 4px; padding: 7px; border: 2px solid var(--border); border-radius: 4px; }
+  .pv i { display: block; height: 7px; }
+  .pv i:nth-child(2) { width: 70%; } .pv i:nth-child(3) { width: 45%; }
+  .pv-mat { background: #17705f; } .pv-mat i { background: #fff; } .pv-mat i:nth-child(1) { background: #ffd23f; }
+  .pv-blocks { background: #a9dcff; } .pv-blocks i { background: #ffb3c9; outline: 1.5px solid #101218; } .pv-blocks i:nth-child(2) { background: #b9ef9f; } .pv-blocks i:nth-child(3) { background: #ffd400; }
+  .pv-neon { background: #06111d; } .pv-neon i { background: linear-gradient(90deg, #22d3ff, #39ff88); box-shadow: 0 0 6px #22d3ff; }
+  .pv-metal { background: #0e1824; } .pv-metal i { background: linear-gradient(180deg, #fff, #c3ccd5 40%, #6f7a85 55%, #d9e1e8 80%, #9aa5b0); }
+  .theme input:checked + .pv { border-color: var(--success); box-shadow: 0 0 0 2px var(--success-bg), 0 0 10px #39ff8855; }
+  .theme:has(input:checked) { color: var(--text); font-weight: 700; }
+  .theme input:focus-visible + .pv, .seg input:focus-visible + span { outline: 3px solid var(--focus); outline-offset: 1px; }
+  .seg { display: grid; grid-template-columns: 1fr 1fr; border: 1px solid var(--border); }
+  .seg label { cursor: pointer; }
+  .seg span { display: block; padding: 7px 0; text-align: center; color: var(--muted); }
+  .seg input:checked + span { background: var(--go-bg); color: var(--go-text); font-weight: 700; }
+  .seg input:disabled + span { opacity: .45; cursor: not-allowed; }
+  .settings > .sub { margin: 10px 0 0; }
+  :root[data-lang=en] [data-l=zh], :root:not([data-lang=en]) [data-l=en] { display: none !important; }
+  /* English: a Latin font first (a CJK font draws "" and '' full width) */
+  :root[data-lang=en] { --font-system: "Segoe UI", system-ui, "Noto Sans TC", "Microsoft JhengHei", sans-serif; }
+  :root[data-lang=en][data-style=blocks] { --font-ui: var(--font-system); --font-display: var(--font-system); }
+  select, input[type=text], input[type=number] {
+    padding: 5px 6px; border: 1px solid var(--border); border-radius: 4px; background: #fff; color: var(--text); font: inherit;
+  }
+  input.mono { font-family: var(--font-code); }
+
+  .banner { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; padding: 10px 16px; }
+  .banner[hidden], .progress[hidden] { display: none; }
+  .banner.warn { background: var(--warn-bg); color: var(--warn-text); }
+  .banner.danger { background: var(--danger-bg); color: var(--danger); font-weight: 600; }
+  .progress { display: flex; align-items: center; gap: 12px; padding: 8px 16px; background: var(--surface); color: var(--text); }
+  .progress progress { flex: 1; height: 12px; accent-color: var(--bar); }
+  .progress-label { min-width: 15em; font-variant-numeric: tabular-nums; }
+
+  .workspace { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 50%) minmax(0, 1fr); gap: 16px; padding: 4px 16px 8px; }
+  .panel {
+    min-width: 0; min-height: 0; display: flex; flex-direction: column; overflow: hidden;
+    background: var(--surface); border: var(--panel-border); border-radius: var(--panel-radius); box-shadow: var(--panel-shadow); color: var(--text);
+  }
+  .panel-head {
+    display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 8px; padding: 8px 10px;
+    background: var(--head-bg); border-bottom: var(--head-border); color: var(--head-text); font-family: var(--font-display); font-weight: 700;
+  }
+  .panel.alt .panel-head { background: var(--head-alt-bg); }
+  .panel-body { flex: 1; min-height: 0; overflow: auto; }
+  .tabs { display: inline-flex; gap: 6px; }
+  .tab {
+    padding: 5px 14px; border: 1px solid transparent; border-radius: var(--btn-radius); background: transparent;
+    color: var(--head-text); font: inherit; font-family: var(--font-display); font-weight: 700; cursor: pointer;
+  }
+  .tab:hover { background: #ffffff66; }
+  .tab[aria-selected=true] { background: var(--tab-on-bg); border: var(--tab-on-border); box-shadow: var(--tab-on-shadow); }
+  .tab-page[hidden] { display: none; }
+
+  .card { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 8px 16px; padding: 12px; border-bottom: 1px solid var(--border); }
+  .card.ok { background: var(--success-bg); }
+  .card.bad { background: var(--danger-bg); color: var(--danger); }
+  .card.empty .big { color: var(--muted); }
+  .label { display: block; color: var(--muted); font-size: 11px; }
+  .big { color: var(--success); font-size: 20px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .card.bad .big { color: var(--danger); }
+  .sub { color: var(--muted); font-size: 12px; overflow-wrap: anywhere; font-weight: 400; }
+  .card.bad .sub { color: var(--danger); }
+  .kv { display: grid; grid-template-columns: max-content 1fr; gap: 2px 12px; margin: 6px 0 0; font-size: 12px; }
+  .kv dt { color: var(--muted); }
+  .kv dd { margin: 0; font-family: var(--font-code); overflow-wrap: anywhere; }
+  .card-actions { padding: 12px; border-bottom: 1px solid var(--border); }
+
+  .online { display: grid; gap: 4px; }
+  .online-pick { display: flex; align-items: center; gap: 8px; font-family: var(--font-display); font-weight: 700; }
+  .online-pick select { flex: 1; min-width: 0; font-weight: 400; }
+  .online .sub.err { color: var(--danger); }
+  .panel.dropping { outline: 3px dashed var(--focus); outline-offset: -3px; }
+
+  .steps { margin: 0; padding: 12px 12px 12px 32px; font-size: 12px; color: var(--muted); }
+  .steps li { margin: 3px 0; }
+  .steps li.now { color: var(--text); font-weight: 700; }
+  .steps li.done { text-decoration: line-through; }
+  .tips { margin: 0 12px 12px; padding: 8px 10px; border-radius: 6px; background: var(--warn-bg); color: var(--warn-text); font-size: 12px; }
+  .tips ul { margin: 4px 0 0; padding-left: 18px; }
+
+  .sec { padding: 12px; border-bottom: 1px solid var(--border); display: grid; gap: 8px; }
+  .sec h3 { margin: 0; display: flex; align-items: center; gap: 8px; font-family: var(--font-display); font-size: 14px; }
+  .sec h3 .tag { font-size: 11px; font-weight: 600; padding: 1px 8px; border-radius: 10px; background: var(--warn-bg); color: var(--warn-text); }
+  .sec h3 .tag.on { background: var(--success-bg); color: var(--success); }
+  .sec .note { margin: 0; color: var(--muted); font-size: 12px; }
+  .sec[aria-disabled=true] > :not(h3):not(.note) { opacity: .45; pointer-events: none; }
+  .grid-form { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
+  .grid-form label { display: grid; gap: 2px; color: var(--muted); font-size: 11px; }
+  .grid-form input, .grid-form select { width: 100%; color: var(--text); font-size: 13px; }
+  .out { font-family: var(--font-code); font-size: 13px; color: var(--success); min-height: 1.4em; }
+  .out.err { color: var(--danger); }
+  .key-led {
+    display: inline-flex; align-items: center; gap: 8px; padding: 6px 12px; border-radius: 20px;
+    background: var(--warn-bg); color: var(--warn-text); font-weight: 700; font-variant-numeric: tabular-nums;
+  }
+  .key-led::before { content: ""; width: 12px; height: 12px; border-radius: 50%; background: #c9cfcc; }
+  .key-led.down { background: var(--success-bg); color: var(--success); }
+  .key-led.down::before { background: #2ecc71; box-shadow: 0 0 0 4px #2ecc7140; }
+
+  .monitor {
+    flex: 1; min-height: 320px; margin: 0; padding: 10px; overflow: auto;
+    background: var(--monitor-bg); color: var(--monitor-text); font-family: var(--font-code); font-size: 13px; line-height: 1.45;
+    white-space: pre-wrap; overflow-wrap: anywhere;
+  }
+  .monitor .system { color: var(--monitor-system); }
+  .monitor .ok { color: var(--monitor-ok); font-weight: 700; }
+  .monitor .err { color: var(--monitor-err); font-weight: 700; }
+  .monitor .t { opacity: .55; }
+
+  .dialog { max-width: 460px; border: 1px solid var(--border); border-radius: var(--panel-radius); background: var(--surface); color: var(--text); font-family: var(--font-ui); }
+  .dialog::backdrop { background: #00000073; }
+  .dialog h2 { margin-top: 0; font-family: var(--font-display); font-size: 16px; }
+  .dialog-actions { display: flex; justify-content: flex-end; gap: 8px; }
+  .versions { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 8px; margin: 12px 0; text-align: center; }
+  .versions[hidden] { display: none; }
+  .versions .big { font-size: 18px; }
+  .versions .arrow { font-size: 20px; color: var(--muted); }
+
+  .footer { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 6px 24px; padding: 4px 16px 8px; color: var(--page-muted); font-size: 11px; }
+
+  @media (max-width: 900px), (max-height: 640px) {
+    html, body { height: auto; }
+    .workspace { grid-template-columns: minmax(0, 1fr); gap: 12px; }
+    .monitor { flex: none; height: 300px; }
+  }
+</style>
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <svg width="40" height="40" viewBox="0 0 40 40" aria-hidden="true">
+        <rect x="6" y="6" width="28" height="28" rx="5" fill="#fff" stroke="#0b3d33" stroke-width="2"/>
+        <g stroke="#0b3d33" stroke-width="2" stroke-linecap="round">
+          <path d="M12 2v4M20 2v4M28 2v4M12 34v4M20 34v4M28 34v4M2 12h4M2 20h4M2 28h4M34 12h4M34 20h4M34 28h4"/>
+        </g>
+        <path d="M20 27V13M14 19l6-6 6 6" fill="none" stroke="#e08e00" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      <div>
+        <h1>GSKY DFU <span class="edition" data-en="Update · MP test">更新・產測</span> <span class="version" title="連線方式" data-en-title="Connection">WebHID</span></h1>
+        <p id="status" class="status" data-state="idle" role="status">尚未連接裝置</p>
+      </div>
+    </div>
+    <div class="actions">
+      <button id="btnConnect" class="btn primary">連接裝置</button>
+      <button id="btnSettings" class="btn" aria-haspopup="true" aria-expanded="false" aria-controls="settings" data-en="⚙ Settings">⚙ 設定</button>
+    </div>
+    <div id="settings" class="settings" role="group" aria-label="設定" data-en-aria-label="Settings" hidden>
+      <div class="settings-head">
+        <strong data-en="⚙ Settings">⚙ 設定</strong>
+        <button id="setClose" class="btn small" aria-label="關閉設定" data-en-aria-label="Close settings">✕</button>
+      </div>
+      <fieldset class="set-group">
+        <legend data-en="Theme">風格</legend>
+        <div class="themes">
+          <label class="theme"><input type="radio" name="style" value="mat"><span class="pv pv-mat"><i></i><i></i><i></i></span><span data-en="Workbench">工作檯</span></label>
+          <label class="theme"><input type="radio" name="style" value="blocks"><span class="pv pv-blocks"><i></i><i></i><i></i></span><span data-en="Blocks">積木</span></label>
+          <label class="theme"><input type="radio" name="style" value="neon"><span class="pv pv-neon"><i></i><i></i><i></i></span><span data-en="Neon">霓虹</span></label>
+          <label class="theme"><input type="radio" name="style" value="metal"><span class="pv pv-metal"><i></i><i></i><i></i></span><span data-en="Metal">金屬</span></label>
+        </div>
+      </fieldset>
+      <fieldset class="set-group">
+        <legend data-en="Language">語言</legend>
+        <div class="seg">
+          <label><input type="radio" name="lang" value="zh" checked><span>中文</span></label>
+          <label><input type="radio" name="lang" value="en"><span>English</span></label>
+        </div>
+      </fieldset>
+      <p class="sub" data-en="Saved in this browser and applied next time.">設定記在這台電腦的瀏覽器裡，下次打開自動套用。</p>
+    </div>
+  </header>
+
+  <div id="unsupported" class="banner danger" hidden data-en="This browser has no WebHID, so it cannot connect to the device. Use Chrome or Edge on a computer.">
+    這個瀏覽器不支援 WebHID，無法連接裝置。請改用電腦版的 Chrome 或 Edge。
+  </div>
+  <div id="warn" class="banner warn" hidden></div>
+
+  <div id="progressWrap" class="progress" hidden>
+    <div id="progressLabel" class="progress-label"></div>
+    <progress id="progress" max="100" value="0"></progress>
+  </div>
+
+  <main class="workspace">
+    <section class="panel" aria-label="工作區" data-en-aria-label="Work area">
+      <div class="panel-head">
+        <div class="tabs" role="tablist">
+          <button class="tab" role="tab" id="tab-dfu" aria-controls="page-dfu" aria-selected="true" data-tab="dfu" data-en="Firmware update">韌體更新</button>
+          <button class="tab" role="tab" id="tab-mp" aria-controls="page-mp" aria-selected="false" data-tab="mp" data-en="MP test">產測</button>
+        </div>
+        <span id="headInfo" class="sub"></span>
+      </div>
+
+      <div class="panel-body">
+        <div id="devCard" class="card empty">
+          <div>
+            <span class="label" data-en="Device">裝置</span>
+            <div id="devBig" class="big">未連接</div>
+            <div id="devSub" class="sub">滑鼠請用 USB 線連接電腦（藍牙不能更新、不能產測）；dongle 直接插上。</div>
+            <dl id="devKv" class="kv" hidden></dl>
+          </div>
+        </div>
+
+        <!-- ── 韌體更新 ─────────────────────────────────────────────── -->
+        <div id="page-dfu" class="tab-page" role="tabpanel" aria-labelledby="tab-dfu">
+          <div id="imgCard" class="card empty">
+            <div>
+              <span class="label" data-en="Firmware file">韌體檔</span>
+              <div id="imgBig" class="big">未選擇</div>
+              <div id="imgSub" class="sub">連接裝置後，自動選網站上這個裝置的最新韌體。</div>
+              <dl id="imgKv" class="kv" hidden></dl>
+            </div>
+          </div>
+          <div class="card-actions online">
+            <label class="online-pick"><span data-en="Online firmware">線上韌體</span>
+              <select id="onlinePick" disabled><option>連接裝置後顯示</option></select>
+            </label>
+            <span id="onlineNote" class="sub">讀取線上韌體清單中…</span>
+          </div>
+          <div class="card-actions row">
+            <button id="btnStart" class="btn primary" disabled data-en="Start update">開始更新</button>
+            <button id="btnRollback" class="btn" disabled title="滑鼠：換回上一版韌體（再按一次換回來）" data-en-title="Mouse: switch back to the previous firmware (press again to switch back)" data-en="Roll back">退回上一版</button>
+            <button id="btnAbort" class="btn danger" hidden data-en="Abort">中止</button>
+            <button id="btnFile" class="btn small" title="不用線上韌體，改選電腦裡的 .bin（測試版、沒有網路時）" data-en-title="Not the online firmware: pick a .bin on this PC (test builds, no network)" data-en="Use a file on this PC">改用電腦裡的檔案</button>
+          </div>
+          <input id="file" type="file" accept=".bin" hidden>
+          <ol id="steps" class="steps">
+            <li data-step="1" data-en="Connect: pick “Mouse” (USB cable) or “Dongle”">連接裝置：選「Mouse」（USB 線）或「Dongle」</li>
+            <li data-step="2" data-en="Check the current version">確認目前的版本</li>
+            <li data-step="3" data-en="The page downloads the newest firmware for this device">網頁自動下載這個裝置的最新韌體</li>
+            <li data-step="4" data-en="Press “Start update”, confirm the versions, and sending starts">按「開始更新」，確認版本後開始傳送</li>
+            <li data-step="5" data-en="The device reboots into the new firmware; the page checks the version">裝置重新開機、換上新韌體，網頁自動檢查版本</li>
+          </ol>
+          <div class="tips">
+            <strong data-en="Note">注意</strong>
+            <ul data-l="zh">
+              <li>更新時不要拔線、不要關掉這個網頁；先關掉 ap_web、dfu_gui 等同時連著裝置的工具。</li>
+              <li>網頁依裝置的產品名稱（GM851 Mouse、Ex02 Mouse、GM855 Mouse、F03 Mouse 和各自的 Dongle）只給同一機種的韌體。Ex02 在 0.95 以前、GM855GT 在 0.8 以前的韌體還叫「GM851」，這些板子第一次換到新名稱要用 SWD 或 <code>dfu_hid_update.py … --any-model</code>。</li>
+              <li>線上韌體放在這個網頁旁邊的 <code>firmware/</code>（清單 <code>manifest.json</code>，用 <code>tools/make_dfu_site.py</code> 產生）；直接開本機的 .html 讀不到，只能改用電腦裡的檔案。</li>
+              <li>滑鼠更新完會自動確認新版本；新版開不了機時，下次重開會自動退回舊版。</li>
+              <li>dongle 沒有「退回上一版」，也不回報映像大小，只檢查版本號。</li>
+            </ul>
+            <ul data-l="en">
+              <li>Do not unplug the cable or close this page during an update; first close ap_web, dfu_gui and any other tool connected to the device.</li>
+              <li>The page only offers firmware of the same model, by the device's product name (GM851 Mouse, Ex02 Mouse, GM855 Mouse, F03 Mouse and their dongles). Ex02 before 0.95 and GM855GT before 0.8 still call themselves “GM851”; the first update of those boards to the new name needs SWD or <code>dfu_hid_update.py … --any-model</code>.</li>
+              <li>Online firmware sits next to this page in <code>firmware/</code> (list <code>manifest.json</code>, made by <code>tools/make_dfu_site.py</code>); a page opened as a local .html file cannot read it, so use a file on this PC.</li>
+              <li>The mouse confirms the new version by itself after an update; if the new one cannot boot, the next restart goes back to the old one.</li>
+              <li>The dongle has no “Roll back” and does not report its image size; only the version number is checked.</li>
+            </ul>
+          </div>
+        </div>
+
+        <!-- ── 產測 ─────────────────────────────────────────────────── -->
+        <div id="page-mp" class="tab-page" role="tabpanel" aria-labelledby="tab-mp" hidden>
+          <section class="sec">
+            <h3><span data-en="Test mode">測試模式</span> <span id="mpTag" class="tag">未進入</span></h3>
+            <div class="row">
+              <button class="btn primary" data-need="any" id="mpEnter" data-en="Enter MP test">進入 MP 測試</button>
+              <button class="btn" data-need="any" id="mpExit" data-en="Exit MP test">離開 MP 測試</button>
+              <button class="btn" data-need="any" id="mpReset" data-en="Chip reset">晶片重置</button>
+            </div>
+            <p class="note" data-en="The mouse does not sleep in MP test. After an RF test, “Exit” reboots the mouse (the radio needs a reboot to return to 2.4G). Through the dongle, commands go on to the mouse.">MP 測試中滑鼠不會睡眠。做過 RF 測試後「離開」會讓滑鼠重開機（射頻要重開機才回到 2.4G）。連 dongle 時指令轉給滑鼠。</p>
+          </section>
+
+          <section class="sec">
+            <h3 data-en="Mouse LED">滑鼠燈號</h3>
+            <div class="row">
+              <button class="btn" data-need="any" data-led="255,0,0"><span class="swatch" style="background:#e53935"></span><span data-en="Red">紅</span></button>
+              <button class="btn" data-need="any" data-led="0,255,0"><span class="swatch" style="background:#43a047"></span><span data-en="Green">綠</span></button>
+              <button class="btn" data-need="any" data-led="0,0,255"><span class="swatch" style="background:#1e88e5"></span><span data-en="Blue">藍</span></button>
+              <button class="btn" data-need="any" data-led="255,255,255"><span class="swatch" style="background:#fff"></span><span data-en="White">白</span></button>
+              <button class="btn" data-need="any" data-led="0,0,0" data-en="End LED test">結束燈號測試</button>
+            </div>
+          </section>
+
+          <section class="sec" id="secDongleLamp">
+            <h3><span data-en="Dongle LED">Dongle 燈號</span> <span class="tag" data-en="Dongle only">只限連 dongle</span></h3>
+            <div class="row">
+              <label>1206RGB <select id="dlPr"></select></label>
+              <label>020RGB <select id="dlChg"></select></label>
+              <button class="btn" data-need="dongle" id="dlLamp" data-en="Light">點燈</button>
+              <button class="btn" data-need="dongle" id="dlLampOff" data-en="Stop">結束</button>
+            </div>
+            <p class="note" data-en="Ends by itself after 60 s or when the PC sleeps, back to the normal lamps. Refused when the board lacks that lamp.">60 秒或電腦睡眠時自動結束，恢復一般燈號。板子沒有某顆燈時會被拒絕。</p>
+          </section>
+
+          <section class="sec">
+            <h3 data-en="Key test">按鍵測試</h3>
+            <div class="row">
+              <span id="keyLed" class="key-led">DPI 鍵：等待</span>
+              <span id="keyCount" class="sub">按下 0 次</span>
+              <button class="btn small" id="keyClear" data-en="Reset">歸零</button>
+            </div>
+            <p class="note" data-en="Press the mouse's DPI key; the mouse reports press / release by itself (AD 04).">按滑鼠的 DPI 鍵，滑鼠會主動回報按下／放開（AD 04）。</p>
+          </section>
+
+          <section class="sec" id="secRf">
+            <h3><span data-en="RF test">RF 測試</span> <span class="tag" data-en="Wired only">只限有線</span></h3>
+            <div class="grid-form">
+              <label><span data-en="Mode">模式</span><select id="rfMode"><option value="100">2.4G 4 Mbps</option><option value="4">BLE 1M</option><option value="8">BLE 2M</option></select></label>
+              <label><span data-en="Power (dBm)">功率（dBm）</span><select id="rfPow"><option>8</option><option>4</option><option>2</option><option>0</option></select></label>
+              <label><span data-en="Channel">頻道</span><input type="number" id="rfCh" min="0" max="39" value="0"></label>
+              <label><span data-en="Packet">封包</span><select id="rfType"><option value="4">PRBS9</option><option value="5">0xF0</option><option value="6">0xAA</option></select></label>
+              <label><span data-en="Length (bytes)">長度（bytes）</span><input type="number" id="rfLen" min="1" max="255" value="35"></label>
+              <label><span data-en="Sweep interval (ms, 0 = fixed)">掃頻間隔（ms，0 固定）</span><input type="number" id="rfSweep" min="0" max="65535" value="0"></label>
+            </div>
+            <div class="row">
+              <button class="btn" data-need="wired" id="rfTx" data-en="Transmit">發射</button>
+              <button class="btn" data-need="wired" id="rfRx" data-en="Receive">接收</button>
+              <button class="btn" data-need="wired" id="rfCarrier" data-en="Carrier">全載波</button>
+              <button class="btn" data-need="wired" id="rfCount" data-en="Read RX count">讀收包數</button>
+              <button class="btn" data-need="wired" id="rfStop" data-en="Stop (mouse reboots)">停止（滑鼠重開機）</button>
+            </div>
+            <div id="rfOut" class="out"></div>
+            <p class="note" data-en="Channel: BLE 0–39 = 2402 + 2n MHz, 2.4G 0–38 = 2403 + 2n MHz. “Sent” on the page does not mean the mouse accepted it; press “Read RX count” and look for “running”.">頻道：BLE 0～39 = 2402 + 2n MHz，2.4G 0～38 = 2403 + 2n MHz。網頁顯示「已送出」不代表滑鼠接受了，按「讀收包數」看「測試進行中」確認。</p>
+          </section>
+
+          <section class="sec">
+            <h3 data-en="Product info">產品資訊</h3>
+            <div class="row">
+              <button class="btn" data-need="any" id="piMac" data-en="Read MAC">讀 MAC</button>
+              <button class="btn" data-need="any" id="piGet" data-en="Read product info">讀產品資訊</button>
+              <button class="btn" id="piSet" disabled data-en="Write product info">寫產品資訊</button>
+              <span id="piOut" class="out"></span>
+            </div>
+            <div class="grid-form">
+              <label><span data-en="Model (hex)">型號（16 進位）</span><input type="text" id="piCustom" class="mono" maxlength="4"></label>
+              <label>VID<input type="text" id="piVid" class="mono" maxlength="4"></label>
+              <label>PID<input type="text" id="piPid" class="mono" maxlength="4"></label>
+              <label>SN<input type="text" id="piSn" maxlength="16"></label>
+              <label><span data-en="Product">產品名</span><input type="text" id="piProd" maxlength="16"></label>
+              <label><span data-en="Manufacturer">製造商</span><input type="text" id="piMfr" maxlength="16"></label>
+            </div>
+            <p class="note" data-en="Read first, then write. Writing only stores it; the USB name does not change.">先讀再寫。寫入只儲存，不會改 USB 名稱。</p>
+          </section>
+
+          <section class="sec">
+            <h3 data-en="Pairing code">配對碼</h3>
+            <div class="grid-form">
+              <label><span data-en="Address (5 bytes)">位址（5 bytes）</span><input type="text" id="paAddr" class="mono" placeholder="例：3C 7A 91 2E 55" data-en-placeholder="e.g. 3C 7A 91 2E 55"></label>
+              <label><span data-en="Key, first 4 bytes (shared ID)">Key 前 4 bytes（共用 ID）</span><input type="text" id="paKey" class="mono" placeholder="例：4B 19 C2 77" data-en-placeholder="e.g. 4B 19 C2 77"></label>
+            </div>
+            <div class="row">
+              <button class="btn" id="paRand" data-en="Random">隨機產生</button>
+              <button class="btn" data-need="any" id="paSet" data-en="Write pairing code">寫配對碼</button>
+              <button class="btn" data-need="dongle" id="paWin" data-en="Open dongle pairing window">接收器開配對視窗</button>
+            </div>
+            <p class="note" data-en="Write the pairing code into both the mouse (wired) and the dongle; they connect only when both match. Or connect the dongle, open its pairing window, and press the pairing key combination on the mouse.">配對碼要分別寫進滑鼠（有線）和 dongle 兩邊，兩邊相同才連得上；或連 dongle 開配對視窗，再在滑鼠上按配對組合鍵。</p>
+          </section>
+
+          <section class="sec">
+            <h3 data-en="Reset">重設</h3>
+            <div class="row">
+              <button class="btn" data-need="any" id="rsFactory" data-en="Factory reset (keeps pairing)">恢復出廠（保留配對）</button>
+              <button class="btn danger" data-need="any" id="rsErase" data-en="Erase all">全部擦除</button>
+            </div>
+            <p class="note" data-en="Erase all clears settings, macros, pairing and product info; the mouse reboots.">全部擦除會清掉設定、巨集、配對、產品資訊，滑鼠重開機。</p>
+          </section>
+        </div>
+      </div>
+    </section>
+
+    <section class="panel alt" aria-label="記錄" data-en-aria-label="Log">
+      <div class="panel-head">
+        <span data-en="Log">記錄</span>
+        <button id="btnClear" class="btn small" data-en="Clear">清除</button>
+      </div>
+      <pre id="log" class="monitor" tabindex="0" aria-live="polite"></pre>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <span data-en="The firmware is handled on this PC only and never uploaded to a server. Needs Chrome / Edge on a computer (WebHID).">韌體只在這台電腦上處理，不會上傳到任何伺服器。需要 Chrome／Edge 電腦版（WebHID）。</span>
+    <span data-en="GSKY · same update protocol as dfu_hid_update.py, same test commands as ap_web.html">GSKY · 更新協議與 dfu_hid_update.py 相同，產測指令與 ap_web.html 相同</span>
+  </footer>
+
+  <dialog id="dlg" class="dialog">
+    <h2 id="dlgTitle">確認</h2>
+    <div id="dlgVers" class="versions">
+      <div><span class="label" data-en="Now">目前</span><div id="dlgFrom" class="big">—</div></div>
+      <div class="arrow">→</div>
+      <div><span class="label" data-en="After">之後</span><div id="dlgTo" class="big">—</div></div>
+    </div>
+    <p id="dlgNote" class="sub"></p>
+    <div class="dialog-actions">
+      <button id="dlgNo" class="btn" data-en="Cancel">取消</button>
+      <button id="dlgYes" class="btn primary">確定</button>
+    </div>
+  </dialog>
+
+<script>
+'use strict';
+const VID = 0x1915, PID_MOUSE = 0x700F, PID_DONGLE = 0x7010, PAGE = 0xFF0A;
+const REPORT = 64, DATA = 60, TIMEOUT_MS = 3000, RETRIES = 3;
+const MCUBOOT_MAGIC = 0x96F3B83D;
+// The USB product strings images carry (dfu_hid_update.py TAGS), one per model (user
+// 2026-11-25: Ex02 "Ex02 Mouse" from GM851GT 0.95, GM855GT its own from 0.8). A build may
+// add a suffix to the device's ("... QT"), so the device's name is matched by its start;
+// none of these may start or contain another. A device with none of them is not updated.
+const TAGS = {
+  mouse: ['F03 Mouse', 'GM851 Mouse', 'GM855 Mouse', 'Ex02 Mouse'],
+  dongle: ['F03 Dongle', 'GM851 Dongle', 'GM855 Dongle'],
+};
+
+const $ = id => document.getElementById(id);
+const h2 = v => v.toString(16).padStart(2, '0').toUpperCase();
+const h4 = v => v.toString(16).padStart(4, '0').toUpperCase();
+const hexs = (b, n) => Array.from(b.slice(0, n), h2).join(' ');
+const le16 = (b, o) => b[o] | (b[o + 1] << 8);
+const le32 = (b, o) => (b[o] | (b[o + 1] << 8) | (b[o + 2] << 16) | (b[o + 3] << 24)) >>> 0;
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+const nf = n => n.toLocaleString('en-US');
+
+let dev = null;        // the open HIDDevice
+let role = null;       // 'mouse' | 'dongle'
+let devTag = null;     // the product string family of the device ('F03 Mouse', ...)
+let running = null;    // { ver, size } (mouse) or { ver, major, minor } (dongle)
+let previous = null;   // mouse: { ver, size, usable }
+let img = null;        // { name, bytes, ver, size, tags }
+let busy = false;      // an update / roll back is in progress
+let cancel = false;
+let waiter = null;     // { match, resolve, timer }
+let chain = Promise.resolve();
+let piLoaded = false;  // product info read from this device (write only after a read)
+
+// ── Language (zh / en) ──────────────────────────────────────────────────────
+// Static text: data-en="..." (plain text) and data-en-<attribute>="..." on the element, or a
+// data-l="zh" and a data-l="en" copy of rich text. Text the code sets: T(zh, en) through put(),
+// kept on the element so a switch re-renders it. Log lines stay in the language they were written in.
+let lang = 'zh';
+const T = (zh, en) => ({ zh, en });
+const tx = t => (t && typeof t === 'object' && 'zh' in t) ? t[lang] : (t == null ? '' : String(t));
+const live = new Set();
+function put(el, t) {
+  el._t = t;
+  el.textContent = tx(t);
+  if (t && typeof t === 'object') live.add(el); else live.delete(el);
+}
+function Err(t) { const e = new Error(tx(t)); e.t = t; return e; }
+const errT = e => (e && e.t) || (e && e.message) || String(e);
+function applyLang(l) {
+  lang = l;
+  const root = document.documentElement;
+  root.lang = l === 'en' ? 'en' : 'zh-Hant';
+  root.dataset.lang = l;
+  document.title = l === 'en' ? 'GSKY DFU Update' : 'GSKY DFU 更新';
+  document.querySelectorAll('[data-en]').forEach(el => {
+    if (el.dataset.zh === undefined) el.dataset.zh = el.textContent;
+    el.textContent = l === 'en' ? el.dataset.en : el.dataset.zh;
+  });
+  document.querySelectorAll('*').forEach(el => {
+    for (const a of Array.from(el.attributes)) {
+      if (!a.name.startsWith('data-en-')) continue;
+      const name = a.name.slice(8), keep = 'data-zh-' + name;
+      if (!el.hasAttribute(keep)) el.setAttribute(keep, el.getAttribute(name) || '');
+      el.setAttribute(name, l === 'en' ? a.value : el.getAttribute(keep));
+    }
+  });
+  for (const el of live) { if (el.isConnected) el.textContent = tx(el._t); else live.delete(el); }
+}
+
+// ── Log, status, steps ──────────────────────────────────────────────────────
+function log(text, cls = '') {
+  const el = $('log');
+  const t = new Date();
+  const ts = [t.getHours(), t.getMinutes(), t.getSeconds()].map(v => String(v).padStart(2, '0')).join(':');
+  const line = document.createElement('span');
+  if (cls) line.className = cls;
+  const stamp = document.createElement('span');
+  stamp.className = 't';
+  stamp.textContent = ts + '  ';
+  line.append(stamp, tx(text) + '\n');
+  el.append(line);
+  el.scrollTop = el.scrollHeight;
+}
+function status(text, state = 'idle') { const s = $('status'); put(s, text); s.dataset.state = state; }
+function step(n) {
+  document.querySelectorAll('#steps li').forEach(li => {
+    const k = +li.dataset.step;
+    li.className = k < n ? 'done' : (k === n ? 'now' : '');
+  });
+}
+function kv(id, rows) {
+  const dl = $(id);
+  dl.innerHTML = '';
+  rows.forEach(([k, v]) => {
+    const dt = document.createElement('dt'); put(dt, k);
+    const dd = document.createElement('dd'); put(dd, v);
+    dl.append(dt, dd);
+  });
+  dl.hidden = rows.length === 0;
+}
+function card(id, kind, big, sub) {
+  $(id + 'Card').className = 'card ' + kind;
+  put($(id + 'Big'), big);
+  put($(id + 'Sub'), sub);
+}
+function warn(text) { const w = $('warn'); put(w, text || ''); w.hidden = !text; }
+function out(id, text, bad = false) { const o = $(id); put(o, text); o.classList.toggle('err', bad); }
+
+// ── Per-viewer conveniences: style and tab ──────────────────────────────────
+function pref(key, def) { try { return localStorage.getItem(key) || def; } catch (e) { return def; } }
+function setPref(key, v) { try { localStorage.setItem(key, v); } catch (e) { /* no storage */ } }
+(function () {
+  const styles = Array.from(document.querySelectorAll('input[name=style]'), r => r.value);
+  let s = pref('gsky-dfu-style', 'mat');
+  if (!styles.includes(s)) s = 'mat';
+  document.documentElement.dataset.style = s;
+  document.querySelectorAll('input[name=style]').forEach(r => {
+    r.checked = r.value === s;
+    r.onchange = () => { document.documentElement.dataset.style = r.value; setPref('gsky-dfu-style', r.value); };
+  });
+  const pop = $('settings'), btn = $('btnSettings');
+  const open = on => { pop.hidden = !on; btn.setAttribute('aria-expanded', String(on)); };
+  btn.onclick = () => open(pop.hidden);
+  $('setClose').onclick = () => { open(false); btn.focus(); };
+  document.addEventListener('click', e => { if (!pop.hidden && !pop.contains(e.target) && !btn.contains(e.target)) open(false); });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape' && !pop.hidden) { open(false); btn.focus(); } });
+  let l = pref('gsky-dfu-lang', '');
+  if (l !== 'zh' && l !== 'en') l = /^zh/i.test(navigator.language || '') ? 'zh' : 'en';
+  document.querySelectorAll('input[name=lang]').forEach(r => {
+    r.checked = r.value === l;
+    r.onchange = () => { applyLang(r.value); setPref('gsky-dfu-lang', r.value); };
+  });
+  applyLang(l);
+})();
+function showTab(name) {
+  document.querySelectorAll('.tab').forEach(t => t.setAttribute('aria-selected', String(t.dataset.tab === name)));
+  $('page-dfu').hidden = name !== 'dfu';
+  $('page-mp').hidden = name !== 'mp';
+  setPref('gsky-dfu-tab', name);
+}
+document.querySelectorAll('.tab').forEach(t => {
+  t.onclick = () => showTab(t.dataset.tab);
+  t.onkeydown = e => {
+    if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+    const other = document.querySelector(`.tab:not([data-tab="${t.dataset.tab}"])`);
+    other.focus(); showTab(other.dataset.tab);
+  };
+});
+showTab(pref('gsky-dfu-tab', 'dfu'));
+
+// ── HID transport ───────────────────────────────────────────────────────────
+function onInput(e) {
+  const b = Uint8Array.from(new Uint8Array(e.data.buffer, e.data.byteOffset, e.data.byteLength));
+  if (waiter && waiter.match(b)) {
+    const w = waiter; waiter = null;
+    clearTimeout(w.timer);
+    w.resolve(b);
+    return;
+  }
+  notify(b);
+}
+// One request, one answer that `match` accepts; null on time-out.
+function txrx(bytes, match, ms) {
+  return new Promise(async (resolve, reject) => {
+    if (!dev) { reject(Err(T('裝置未連接', 'Device not connected'))); return; }
+    const pkt = new Uint8Array(REPORT);
+    pkt.set(bytes.slice(0, REPORT));
+    waiter = { match, resolve, timer: setTimeout(() => { waiter = null; resolve(null); }, ms) };
+    try { await dev.sendReport(0, pkt); }
+    catch (err) { if (waiter) { clearTimeout(waiter.timer); waiter = null; } reject(err); }
+  });
+}
+// Test commands go one at a time (a late answer must not answer the next one).
+function request(bytes, match, ms = 1500) {
+  const run = async () => {
+    const r = await txrx(bytes, match, ms);
+    if (!r) throw Err(T('沒有回覆（逾時）', 'No reply (time-out)'));
+    return r;
+  };
+  const p = chain.then(run, run);
+  chain = p.then(() => {}, () => sleep(300));
+  return p;
+}
+// 1A F1 sub b3 payload, up to RETRIES times with the SAME bytes (the device re-ACKs a
+// duplicate DATA without writing it twice).
+async function xfer(sub, b3 = 0, payload = new Uint8Array(0)) {
+  const pkt = new Uint8Array(4 + payload.length);
+  pkt.set([0x1A, 0xF1, sub, b3]);
+  pkt.set(payload, 4);
+  const match = r => r[0] === 0x1A && r[1] === 0xF1 && r[2] === sub && (sub !== 0x02 || r[4] === b3);
+  for (let i = 0; i < RETRIES; i++) {
+    const r = await txrx(pkt, match, TIMEOUT_MS);
+    if (r) return r;
+    if (sub === 0x02) log(T(`seq ${b3}：沒有回覆，重送（${i + 1}/${RETRIES}）`, `seq ${b3}: no reply, sending again (${i + 1}/${RETRIES})`), 'system');
+  }
+  return null;
+}
+const slotOf = (b, o) => {
+  const size = le32(b, o + 8);
+  return size ? { ver: `${b[o]}.${b[o + 1]}.${le16(b, o + 2)}+${le32(b, o + 4)}`, size } : null;
+};
+async function querySlots() {
+  const r = await txrx([0x1A, 0xAA, 0x01], b => b[0] === 0x1A && b[1] === 0xAA && b[2] === 0x01, 1500);
+  if (!r) return null;
+  const run = slotOf(r, 5);
+  if (!run) return null;
+  const prev = slotOf(r, 17);
+  return { running: run, previous: prev ? { ...prev, usable: r[4] === 1 } : null };
+}
+async function dongleVersion() {
+  const r = await txrx([0x1A, 0x8A, 0x04], b => b[0] === 0x1A && b[1] === 0x8A && b[2] === 0x04, 1500);
+  if (!r) return null;
+  const v = le16(r, 3);                    // BCD: 0x0094 = 0.94
+  const major = parseInt((v >> 8).toString(16), 10), minor = parseInt(h2(v & 0xFF), 10);
+  return { ver: `${major}.${minor}`, major, minor };
+}
+
+// Reports the mouse sends by itself.
+function notify(b) {
+  if (b[0] === 0x1A && b[1] === 0xAD && b[2] === 0x04) {
+    const down = (b[4] & 1) === 1;
+    const led = $('keyLed');
+    led.classList.toggle('down', down);
+    put(led, T(`DPI 鍵：${down ? '按下' : '放開'}`, `DPI key: ${down ? 'down' : 'up'}`));
+    if (down) { keyPresses++; put($('keyCount'), T(`按下 ${keyPresses} 次`, `Pressed ${keyPresses} times`)); }
+    log(T(`按鍵測試：DPI 鍵${down ? '按下' : '放開'}`, `Key test: DPI key ${down ? 'down' : 'up'}`), 'ok');
+  }
+}
+let keyPresses = 0;
+
+// ── Device ──────────────────────────────────────────────────────────────────
+const vendorIf = d => d.vendorId === VID && (d.productId === PID_MOUSE || d.productId === PID_DONGLE) &&
+  d.collections.some(c => c.usagePage === PAGE);
+
+async function openDev(d) {
+  if (!d.opened) await d.open();
+  dev = d;
+  dev.addEventListener('inputreport', onInput);
+  piLoaded = false;
+  role = d.productId === PID_DONGLE ? 'dongle' : 'mouse';
+  devTag = TAGS[role].find(t => (d.productName || '').startsWith(t)) || null;
+}
+async function closeDev() {
+  if (!dev) return;
+  const d = dev; dev = null;
+  d.removeEventListener('inputreport', onInput);
+  try { await d.close(); } catch (e) { /* gone already */ }
+}
+
+async function refreshDevice() {
+  running = previous = null;
+  const name = dev.productName || tx(T('（沒有產品名稱）', '(no product name)'));
+  const sub = role === 'dongle' ? `${name} · Dongle` : T(`${name} · 滑鼠（USB 線）`, `${name} · Mouse (USB cable)`);
+  $('headInfo').textContent = `${name} · PID ${h4(dev.productId)}`;
+  if (role === 'mouse') {
+    const s = await querySlots();
+    if (!s) throw Err(T('滑鼠沒有回覆版本查詢（1A AA 01）', 'The mouse did not answer the version query (1A AA 01)'));
+    running = s.running; previous = s.previous;
+    card('dev', 'ok', running.ver, sub);
+    kv('devKv', [
+      [T('目前', 'Now'), T(`${running.ver}（${nf(running.size)} bytes）`, `${running.ver} (${nf(running.size)} bytes)`)],
+      [T('上一版', 'Previous'), previous
+        ? T(`${previous.ver}（${nf(previous.size)} bytes）${previous.usable ? '' : ' · 不能退回'}`,
+            `${previous.ver} (${nf(previous.size)} bytes)${previous.usable ? '' : ' · cannot roll back'}`)
+        : T('沒有', 'none')],
+    ]);
+    log(T(`滑鼠：目前 ${running.ver}（${nf(running.size)} bytes）；上一版 ${previous ? previous.ver + (previous.usable ? '' : '（不能退回）') : '沒有'}`,
+      `Mouse: now ${running.ver} (${nf(running.size)} bytes); previous ${previous ? previous.ver + (previous.usable ? '' : ' (cannot roll back)') : 'none'}`));
+  } else {
+    const v = await dongleVersion();
+    if (!v) throw Err(T('dongle 沒有回覆版本查詢（1A 8A 04）', 'The dongle did not answer the version query (1A 8A 04)'));
+    running = v;
+    card('dev', 'ok', v.ver, sub);
+    kv('devKv', [[T('目前', 'Now'), v.ver]]);
+    log(T(`dongle：目前 ${v.ver}`, `Dongle: now ${v.ver}`));
+  }
+  if (!devTag) log(T(`產品名稱「${name}」不在已知清單（${TAGS[role].join('、')}），網頁不知道它是哪個機種，不能更新`,
+    `Product name “${name}” is not on the known list (${TAGS[role].join(', ')}); the page does not know the model and will not update it`), 'err');
+}
+
+function updateButtons() {
+  const ok = !!dev && !busy;
+  $('btnConnect').disabled = busy;
+  $('btnFile').disabled = busy;
+  $('onlinePick').disabled = busy || !onlineFor().length;
+  $('btnStart').disabled = !(ok && img && compatible().ok);
+  $('btnRollback').disabled = !(ok && role === 'mouse' && previous && previous.usable);
+  $('btnRollback').hidden = role === 'dongle';
+  $('btnAbort').hidden = !busy;
+  put($('btnConnect'), dev ? T('重新連接', 'Reconnect') : T('連接裝置', 'Connect device'));
+  // production test: 'any' = a device, 'wired' = the mouse on its cable, 'dongle' = the dongle
+  document.querySelectorAll('[data-need]').forEach(b => {
+    const need = b.dataset.need;
+    b.disabled = !ok || (need === 'wired' && role !== 'mouse') || (need === 'dongle' && role !== 'dongle');
+  });
+  $('piSet').disabled = !ok || !piLoaded;          // read before write
+  $('secRf').setAttribute('aria-disabled', String(!!dev && role !== 'mouse'));
+  $('secDongleLamp').setAttribute('aria-disabled', String(!!dev && role !== 'dongle'));
+}
+
+function compatible() {
+  if (!img) return { ok: false, why: '' };
+  if (!dev) return { ok: true, why: '' };
+  if (!devTag) {
+    return { ok: false, why: T(`裝置的產品名稱「${dev.productName || ''}」不在已知清單，網頁不知道它是哪個機種，不能更新。`,
+      `The device's product name “${dev.productName || ''}” is not on the known list; the page does not know the model and will not update it.`) };
+  }
+  return img.tags.includes(devTag) ? { ok: true, why: '' }
+    : { ok: false, why: T(`這個檔案不是「${devTag}」的韌體（檔案裡是：${img.tags.join('、') || '沒有已知的產品名稱'}）。`,
+      `This file is not firmware for “${devTag}” (it carries: ${img.tags.join(', ') || 'no known product name'}).`) };
+}
+function showCompat() {
+  if (!img) return;
+  const c = compatible();
+  const same = c.ok && dev && running && running.ver === img.ver;
+  card('img', c.ok ? 'ok' : 'bad', img.ver,
+    same ? T(`${img.name} · 裝置已經是這個版本`, `${img.name} · the device already runs this version`) : img.name);
+  warn(c.ok ? '' : c.why);
+}
+
+$('btnConnect').onclick = async () => {
+  if (!('hid' in navigator)) { $('unsupported').hidden = false; return; }
+  try {
+    const list = await navigator.hid.requestDevice({
+      filters: [PID_MOUSE, PID_DONGLE].map(p => ({ vendorId: VID, productId: p, usagePage: PAGE })),
+    });
+    const d = list.find(vendorIf);
+    if (!d) { log(T('沒有選到裝置', 'No device chosen'), 'system'); return; }
+    if (d.productId === PID_MOUSE && !d.productName) {
+      throw Err(T('這是藍牙連線的滑鼠，藍牙不能更新也不能產測。請用 USB 線連接滑鼠。',
+        'This mouse is connected over Bluetooth, which can neither update nor test. Connect the mouse with its USB cable.'));
+    }
+    await closeDev();
+    await openDev(d);
+    log(T(`已連接：${d.productName || '?'}（VID ${h4(d.vendorId)} PID ${h4(d.productId)}）`,
+      `Connected: ${d.productName || '?'} (VID ${h4(d.vendorId)} PID ${h4(d.productId)})`), 'system');
+    status(T('已連接，讀取版本中…', 'Connected, reading the version…'), 'busy');
+    await refreshDevice();
+    status(T(`已連接：${d.productName}`, `Connected: ${d.productName}`), 'ready');
+    step(img ? 4 : 3);
+    showCompat();
+    await pickOnline();
+  } catch (err) {
+    log(T('連接失敗：' + (err.message || err), 'Connection failed: ' + (err.message || err)), 'err');
+    status(T('連接失敗', 'Connection failed'), 'error');
+    card('dev', 'bad', T('連接失敗', 'Connection failed'), errT(err));
+    kv('devKv', []);
+  }
+  updateButtons();
+};
+
+// ── Image ───────────────────────────────────────────────────────────────────
+function findBytes(hay, needle) {
+  const n = new TextEncoder().encode(needle);
+  outer: for (let i = 0; i + n.length <= hay.length; i++) {
+    if (hay[i] !== n[0]) continue;
+    for (let j = 1; j < n.length; j++) if (hay[i + j] !== n[j]) continue outer;
+    return true;
+  }
+  return false;
+}
+// Takes the bytes as the image to send; false (and a red card) when they are not an MCUboot image.
+function useImage(name, bytes, source) {
+  img = null;
+  kv('imgKv', []);
+  warn('');
+  if (bytes.length < 32 || le32(bytes, 0) !== MCUBOOT_MAGIC) {
+    card('img', 'bad', T('不能用', 'Not usable'),
+      T(`${name}：不是 MCUboot 簽章映像（要用 zephyr.signed.bin）`, `${name}: not a signed MCUboot image (use zephyr.signed.bin)`));
+    log(T(`${name}：不是 MCUboot 簽章映像`, `${name}: not a signed MCUboot image`), 'err');
+    updateButtons();
+    return false;
+  }
+  const ver = `${bytes[20]}.${bytes[21]}.${le16(bytes, 22)}+${le32(bytes, 24)}`;
+  const size = le32(bytes, 12);
+  const tags = [...TAGS.mouse, ...TAGS.dongle].filter(t => findBytes(bytes, t));
+  img = { name, bytes, ver, size, tags, source };
+  kv('imgKv', [
+    [T('版本', 'Version'), ver],
+    [T('來源', 'Source'), source === 'online' ? T('線上', 'online') : T('電腦裡的檔案', 'file on this PC')],
+    [T('檔案', 'File'), T(`${nf(bytes.length)} bytes（映像 ${nf(size)}）`, `${nf(bytes.length)} bytes (image ${nf(size)})`)],
+    [T('產品', 'Product'), T(tags.join('、') || '沒有已知的產品名稱', tags.join(', ') || 'no known product name')],
+  ]);
+  log(T(`韌體檔（${source === 'online' ? '線上' : '電腦'}）：${name}，版本 ${ver}，${nf(bytes.length)} bytes，產品 ${tags.join('、') || '?'}`,
+    `Firmware (${source === 'online' ? 'online' : 'this PC'}): ${name}, version ${ver}, ${nf(bytes.length)} bytes, product ${tags.join(', ') || '?'}`));
+  showCompat();
+  if (dev) step(4);
+  updateButtons();
+  return true;
+}
+function clearImage(sub) {
+  img = null;
+  card('img', 'empty', T('未選擇', 'None'), sub);
+  kv('imgKv', []);
+  warn('');
+}
+async function loadFile(f) {
+  if (!f) return;
+  const bytes = new Uint8Array(await f.arrayBuffer());
+  if (useImage(f.name, bytes, 'local')) $('onlinePick').selectedIndex = -1;   // not one of the list
+}
+$('btnFile').onclick = () => $('file').click();
+$('file').onchange = e => { loadFile(e.target.files[0]); e.target.value = ''; };
+['dragenter', 'dragover'].forEach(t => document.addEventListener(t, e => {
+  e.preventDefault(); if (!busy) document.querySelector('.panel').classList.add('dropping');
+}));
+['dragleave', 'drop'].forEach(t => document.addEventListener(t, e => {
+  e.preventDefault(); document.querySelector('.panel').classList.remove('dropping');
+}));
+document.addEventListener('drop', e => {
+  if (busy || !e.dataTransfer.files[0]) return;
+  showTab('dfu');
+  loadFile(e.dataTransfer.files[0]);
+});
+
+// ── Online firmware (firmware/manifest.json next to this page; make_dfu_site.py) ──
+// { "images": [ { "product": "GM851 Mouse", "version": "0.94.0+0", "file": "x.bin",
+//                 "bytes": 123, "sha256": "...", "date": "2026-11-25" } ] }
+// Only plain file names in the same folder; size and SHA-256 are checked after the download,
+// the header version against the list, and the product string against the device as for a
+// local file. The device's MCUboot checks the signature in any case.
+const FW_DIR = 'firmware/';
+let manifest = [];
+const verKey = v => (String(v).match(/\d+/g) || []).map(Number);
+const verCmp = (a, b) => {
+  const x = verKey(a), y = verKey(b);
+  for (let i = 0; i < 4; i++) { const d = (x[i] || 0) - (y[i] || 0); if (d) return d; }
+  return 0;
+};
+function onlineNote(text, bad = false) { const n = $('onlineNote'); put(n, text); n.classList.toggle('err', bad); }
+
+async function loadManifest() {
+  onlineNote(T('讀取線上韌體清單中…', 'Reading the online firmware list…'));
+  if (location.protocol === 'file:') {
+    onlineNote(T('這個網頁是從電腦直接開啟的，讀不到線上韌體；請按「改用電腦裡的檔案」。',
+      'This page was opened as a file on this PC and cannot read online firmware; press “Use a file on this PC”.'), true);
+    return;
+  }
+  try {
+    const r = await fetch(FW_DIR + 'manifest.json', { cache: 'no-store' });
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    const m = await r.json();
+    manifest = (Array.isArray(m.images) ? m.images : []).filter(e => e &&
+      typeof e.product === 'string' && typeof e.version === 'string' &&
+      typeof e.file === 'string' && /^[\w.+-]+\.bin$/.test(e.file));
+    if (!manifest.length) { onlineNote(T('線上韌體清單是空的；請按「改用電腦裡的檔案」。', 'The online firmware list is empty; press “Use a file on this PC”.'), true); return; }
+    const newest = {};
+    manifest.forEach(e => { if (!newest[e.product] || verCmp(e.version, newest[e.product]) > 0) newest[e.product] = e.version; });
+    const list = Object.entries(newest).map(([p, v]) => `${p} ${v}`);
+    onlineNote(T('線上最新：' + list.join('、'), 'Newest online: ' + list.join(', ')));
+    log(T(`線上韌體清單：${manifest.length} 個檔案`, `Online firmware list: ${manifest.length} files`), 'system');
+  } catch (err) {
+    onlineNote(T(`讀不到線上韌體清單（${err.message}）；請按「改用電腦裡的檔案」。`,
+      `Cannot read the online firmware list (${err.message}); press “Use a file on this PC”.`), true);
+    log(T(`讀不到線上韌體清單：${err.message}`, `Cannot read the online firmware list: ${err.message}`), 'err');
+  }
+}
+const manifestReady = loadManifest();
+
+// The entries for the connected device, newest first.
+function onlineFor() {
+  if (!dev || !devTag) return [];
+  return manifest.filter(e => e.product === devTag).sort((a, b) => verCmp(b.version, a.version));
+}
+function fillOnline() {
+  const sel = $('onlinePick');
+  const list = onlineFor();
+  sel.innerHTML = '';
+  const opt = (t, v) => { const o = new Option('', v); put(o, t); sel.add(o); };
+  if (!list.length) opt(dev ? T('沒有這個裝置的線上韌體', 'No online firmware for this device') : T('連接裝置後顯示', 'Shown after connecting'), '');
+  list.forEach((e, i) => opt(T(`${e.product} ${e.version}${i === 0 ? '（最新）' : ''}${e.date ? ' · ' + e.date : ''}`,
+    `${e.product} ${e.version}${i === 0 ? ' (newest)' : ''}${e.date ? ' · ' + e.date : ''}`), e.file));
+  return list;
+}
+async function sha256(bytes) {
+  return Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', bytes)), h2).join('').toLowerCase();
+}
+async function loadOnline(file) {
+  const e = manifest.find(x => x.file === file);
+  if (!e) return;
+  clearImage(T(`下載 ${e.file} 中…`, `Downloading ${e.file}…`));
+  onlineNote(T(`下載 ${e.file} 中…`, `Downloading ${e.file}…`));
+  updateButtons();
+  try {
+    const r = await fetch(FW_DIR + encodeURIComponent(e.file), { cache: 'no-store' });
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    const bytes = new Uint8Array(await r.arrayBuffer());
+    if (e.bytes && bytes.length !== e.bytes) throw Err(T(`大小 ${nf(bytes.length)} bytes，清單寫 ${nf(e.bytes)}（檔案不完整或被換掉）`,
+      `Size ${nf(bytes.length)} bytes, the list says ${nf(e.bytes)} (file incomplete or replaced)`));
+    let hashed = false;
+    if (e.sha256) {
+      if (!(window.crypto && crypto.subtle)) throw Err(T('瀏覽器不能檢查 SHA-256（網頁要用 https 開啟）', 'This browser cannot check SHA-256 (open the page over https)'));
+      if (await sha256(bytes) !== e.sha256.toLowerCase()) throw Err(T('SHA-256 不符（檔案不完整或被換掉）', 'SHA-256 mismatch (file incomplete or replaced)'));
+      hashed = true;
+    }
+    if (!useImage(e.file, bytes, 'online')) throw Err(T('不是 MCUboot 簽章映像', 'not a signed MCUboot image'));
+    if (verCmp(img.ver, e.version) !== 0 || !img.tags.includes(e.product)) {
+      const got = `${img.ver} / ${img.tags.join('、') || '?'}`;
+      clearImage('');
+      throw Err(T(`檔案內容是 ${got}，清單寫 ${e.version} / ${e.product}`, `The file holds ${got}, the list says ${e.version} / ${e.product}`));
+    }
+    onlineNote(T(`已下載 ${e.file}（${nf(bytes.length)} bytes${hashed ? '，SHA-256 相符' : ''}）`,
+      `Downloaded ${e.file} (${nf(bytes.length)} bytes${hashed ? ', SHA-256 OK' : ''})`));
+  } catch (err) {
+    if (!img || img.source === 'online') {
+      img = null;
+      card('img', 'bad', T('下載失敗', 'Download failed'), T(`${e.file}：${err.message}`, `${e.file}: ${err.message}`));
+      kv('imgKv', []);
+    }
+    onlineNote(T(`${e.file} 不能用：${err.message}`, `${e.file} not usable: ${err.message}`), true);
+    log(T(`線上韌體 ${e.file} 不能用：${err.message}`, `Online firmware ${e.file} not usable: ${err.message}`), 'err');
+  }
+  updateButtons();
+}
+$('onlinePick').onchange = e => { if (e.target.value && !busy) loadOnline(e.target.value); };
+
+// After a (re)connect: the newest online image for this device, unless a local file that
+// fits it was chosen by hand.
+async function pickOnline() {
+  await manifestReady;
+  const list = fillOnline();
+  if (img && img.source === 'local' && compatible().ok) { $('onlinePick').selectedIndex = -1; return; }
+  if (list.length) { await loadOnline(list[0].file); return; }
+  if (img && img.source === 'online') clearImage(T('網站上沒有這個裝置的韌體；請按「改用電腦裡的檔案」。', 'The site has no firmware for this device; press “Use a file on this PC”.'));
+  if (!devTag) onlineNote(T(`裝置的產品名稱「${dev.productName || ''}」不在已知清單，不提供韌體。`, `The device's product name “${dev.productName || ''}” is not on the known list; no firmware offered.`), true);
+  else if (manifest.length) onlineNote(T(`網站上沒有「${devTag}」的韌體。`, `The site has no firmware for “${devTag}”.`), true);
+}
+
+// ── Dialog ──────────────────────────────────────────────────────────────────
+// With from / to: the version change; without: a plain question.
+function ask({ title, from, to, note, yes = T('確定', 'OK'), danger = false }) {
+  return new Promise(resolve => {
+    put($('dlgTitle'), title);
+    $('dlgVers').hidden = from === undefined;
+    if (from !== undefined) { $('dlgFrom').textContent = from; $('dlgTo').textContent = to; }
+    put($('dlgNote'), note || '');
+    put($('dlgYes'), yes);
+    $('dlgYes').className = 'btn ' + (danger ? 'danger' : 'primary');
+    const d = $('dlg');
+    const done = v => { d.close(); resolve(v); };
+    $('dlgYes').onclick = () => done(true);
+    $('dlgNo').onclick = () => done(false);
+    d.oncancel = () => resolve(false);
+    d.showModal();
+  });
+}
+
+// ── Wait for the device to come back (reboot + MCUboot swap) ─────────────────
+// Not seen leaving within 15 s: it was already back or never left - the version tells.
+async function waitBack(pid, sec = 60) {
+  const t0 = Date.now();
+  let gone = false;
+  while (Date.now() - t0 < sec * 1000) {
+    const here = (await navigator.hid.getDevices()).filter(d => d.productId === pid && vendorIf(d));
+    gone = gone || here.length === 0 || Date.now() - t0 > 15000;
+    if (gone && here.length) {
+      await sleep(2000);                   // the new image confirms itself in its init
+      const d = (await navigator.hid.getDevices()).find(x => x.productId === pid && vendorIf(x));
+      if (!d) continue;
+      await openDev(d);
+      return true;
+    }
+    const s = Math.round((Date.now() - t0) / 1000);
+    put($('progressLabel'), gone ? T(`等待裝置回來…（${s} 秒）`, `Waiting for the device to come back… (${s} s)`)
+      : T(`等待裝置重新開機…（${s} 秒）`, `Waiting for the device to reboot… (${s} s)`));
+    await sleep(300);
+  }
+  return false;
+}
+
+async function verify(want, what) {
+  try { await refreshDevice(); } catch (err) {
+    log(T(`${what.zh}：讀不到版本（${err.message}），請手動確認`, `${what.en}: cannot read the version (${err.message}); check it by hand`), 'err');
+    return false;
+  }
+  const ok = role === 'mouse'
+    ? (running.ver === want.ver && running.size === want.size)
+    : (running.major === want.major && running.minor === want.minor);
+  if (ok) {
+    log(T(`${what.zh}成功：裝置現在跑 ${running.ver}`, `${what.en} done: the device now runs ${running.ver}`), 'ok');
+    status(T(`${what.zh}成功：${running.ver}`, `${what.en} done: ${running.ver}`), 'ready');
+  } else {
+    log(T(`${what.zh}沒有生效：裝置還是 ${running.ver}，預期 ${want.ver}`, `${what.en} did not take: the device still runs ${running.ver}, expected ${want.ver}`), 'err');
+    status(T(`${what.zh}沒有生效`, `${what.en} did not take`), 'error');
+    card('dev', 'bad', running.ver, T(`預期 ${want.ver}`, `Expected ${want.ver}`));
+  }
+  showCompat();
+  return ok;
+}
+
+function beginBusy(label) {
+  busy = true; cancel = false;
+  $('progressWrap').hidden = false;
+  $('progress').value = 0;
+  put($('progressLabel'), label);
+  window.onbeforeunload = e => { e.preventDefault(); e.returnValue = ''; };
+  updateButtons();
+}
+function endBusy() {
+  busy = false;
+  $('progressWrap').hidden = true;
+  window.onbeforeunload = null;
+  updateButtons();
+}
+async function rebooting() {
+  $('progress').removeAttribute('value');        // indeterminate while it reboots
+  $('btnAbort').hidden = true;                    // nothing left to abort
+  await closeDev();
+  card('dev', 'empty', T('重新開機中…', 'Rebooting…'), T('等它回來後自動檢查版本', 'The version is checked when it comes back'));
+  kv('devKv', []);
+}
+
+// ── Update ──────────────────────────────────────────────────────────────────
+$('btnStart').onclick = async () => {
+  const c = compatible();
+  if (!c.ok) { warn(c.why); return; }
+  const go = await ask({
+    title: T(`更新${role === 'mouse' ? '滑鼠' : ' dongle'}`, `Update the ${role === 'mouse' ? 'mouse' : 'dongle'}`),
+    from: running ? running.ver : '?', to: img.ver,
+    note: T(`${img.name}（${img.source === 'online' ? '線上' : '電腦裡的檔案'}），${nf(img.bytes.length)} bytes。` +
+      (running && running.ver === img.ver ? '裝置已經是這個版本，會重新燒一次。' : '') +
+      '傳送約需 1 分鐘，期間不要拔線。',
+      `${img.name} (${img.source === 'online' ? 'online' : 'file on this PC'}), ${nf(img.bytes.length)} bytes. ` +
+      (running && running.ver === img.ver ? 'The device already runs this version; it is written again. ' : '') +
+      'Sending takes about 1 minute; do not unplug the cable.'),
+    yes: T('開始更新', 'Start update'),
+  });
+  if (!go) return;
+
+  const pid = dev.productId;
+  const want = { ver: img.ver, size: img.size, major: img.bytes[20], minor: img.bytes[21] };
+  beginBusy(T('開始…', 'Starting…'));
+  status(T('更新中，不要拔線', 'Updating, do not unplug'), 'busy');
+  step(5);
+  try {
+    await chain;                                  // a test command still on its way
+    await sleep(100);
+    const total = img.bytes.length;
+    const size = new Uint8Array(4);
+    new DataView(size.buffer).setUint32(0, total, true);
+    let r = await xfer(0x01, 0, size);
+    if (!r || r[3] !== 0) throw Err(T('START 被拒：' + (r ? hexs(r, 6) : '沒有回覆'), 'START refused: ' + (r ? hexs(r, 6) : 'no reply')));
+    log(T(`開始傳送 ${nf(total)} bytes`, `Sending ${nf(total)} bytes`), 'system');
+
+    const t0 = performance.now();
+    let seq = 0;
+    for (let off = 0; off < total; off += DATA) {
+      if (cancel) { await xfer(0xFF); throw Err(T('已中止（裝置上的舊韌體不受影響）', 'Aborted (the firmware on the device is not affected)')); }
+      r = await xfer(0x02, seq, img.bytes.subarray(off, off + DATA));
+      if (!r || r[3] !== 0 || r[4] !== seq) {
+        await xfer(0xFF);
+        throw Err(T(`第 ${nf(off)} byte（seq ${seq}）失敗：` + (r ? hexs(r, 6) : '沒有回覆'),
+          `Byte ${nf(off)} (seq ${seq}) failed: ` + (r ? hexs(r, 6) : 'no reply')));
+      }
+      seq = (seq + 1) & 0xFF;
+      if ((off / DATA) % 16 === 0 || off + DATA >= total) {
+        const done = Math.min(off + DATA, total);
+        const pct = done * 100 / total;
+        const el = (performance.now() - t0) / 1000;
+        const left = done ? el * (total - done) / done : 0;
+        $('progress').value = pct;
+        put($('progressLabel'), T(`傳送中 ${nf(done)} / ${nf(total)} bytes（${pct.toFixed(0)}%）· 剩約 ${Math.ceil(left)} 秒`,
+          `Sending ${nf(done)} / ${nf(total)} bytes (${pct.toFixed(0)}%) · about ${Math.ceil(left)} s left`));
+      }
+    }
+    try { r = await xfer(0x03); } catch (err) { r = null; }   // the device may reboot while we wait
+    if (!r) log(T('END 沒有回覆：裝置應該已經重新開機', 'No reply to END: the device should have rebooted'), 'system');
+    else if (r[3] !== 0) throw Err(T('END 被拒：' + hexs(r, 6), 'END refused: ' + hexs(r, 6)));
+    else {
+      const secs = ((performance.now() - t0) / 1000).toFixed(1);
+      log(T(`傳送完成（${secs} 秒）；裝置重新開機，MCUboot 換上新韌體`, `Sent (${secs} s); the device reboots and MCUboot swaps in the new firmware`), 'system');
+    }
+
+    await rebooting();
+    if (!await waitBack(pid)) throw Err(T('60 秒內裝置沒有回來。請拔插後按「連接裝置」確認版本。', 'The device did not come back within 60 s. Replug it and press “Connect device” to check the version.'));
+    await verify(want, T('更新', 'Update'));
+  } catch (err) {
+    log(err.message || String(err), 'err');
+    status(T('更新失敗', 'Update failed'), 'error');
+  } finally {
+    endBusy();
+  }
+};
+
+$('btnAbort').onclick = () => { cancel = true; log(T('中止中…', 'Aborting…'), 'system'); };
+
+// ── Roll back (mouse) ───────────────────────────────────────────────────────
+$('btnRollback').onclick = async () => {
+  if (!previous || !previous.usable) return;
+  const go = await ask({
+    title: T('退回上一版', 'Roll back'), from: running.ver, to: previous.ver,
+    note: T('滑鼠會換回上一版韌體；再按一次「退回上一版」可以換回來。', 'The mouse switches back to the previous firmware; press “Roll back” again to switch back.'),
+    yes: T('退回', 'Roll back'),
+  });
+  if (!go) return;
+  const want = { ver: previous.ver, size: previous.size };
+  const pid = dev.productId;
+  beginBusy(T('送出退回指令…', 'Sending the roll-back command…'));
+  $('progress').removeAttribute('value');
+  status(T('退回中，不要拔線', 'Rolling back, do not unplug'), 'busy');
+  try {
+    await chain;
+    const r = await txrx([0x1A, 0xAA, 0x55], b => b[0] === 0x1A && b[1] === 0xAA, 1500);
+    if (!r || r[2] !== 0x01 || r[3] !== 0x00) throw Err(T('退回被拒：' + (r ? hexs(r, 4) : '沒有回覆'), 'Roll back refused: ' + (r ? hexs(r, 4) : 'no reply')));
+    log(T('退回已接受，等待滑鼠重新開機…', 'Roll back accepted, waiting for the mouse to reboot…'), 'system');
+    await rebooting();
+    if (!await waitBack(pid)) throw Err(T('60 秒內滑鼠沒有回來。請拔插後按「連接裝置」確認版本。', 'The mouse did not come back within 60 s. Replug it and press “Connect device” to check the version.'));
+    await verify(want, T('退回', 'Roll back'));
+  } catch (err) {
+    log(err.message || String(err), 'err');
+    status(T('退回失敗', 'Roll back failed'), 'error');
+  } finally {
+    endBusy();
+  }
+};
+
+// ── Production test (AD commands, mp_test.c; as ap_web.html) ────────────────
+const AD = (b2, ...rest) => [0x1A, 0xAD, b2, ...rest];
+const isAd = (b2, b3) => r => r[0] === 0x1A && r[1] === 0xAD && r[2] === b2 && (b3 === undefined || r[3] === b3);
+const hexBytes = (t, n, what) => {
+  const v = t.trim().split(/[\s,:-]+/).filter(Boolean).map(x => parseInt(x, 16));
+  if (v.length !== n || v.some(x => Number.isNaN(x) || x < 0 || x > 255)) throw Err(T(`${what.zh}要 ${n} 個 16 進位位元組`, `${what.en} needs ${n} hex bytes`));
+  return v;
+};
+const strBytes = (t, n) => { const a = new Uint8Array(n); a.set(new TextEncoder().encode(t).slice(0, n)); return Array.from(a); };
+const bytesStr = b => new TextDecoder().decode(Uint8Array.from(b)).replace(/\0+$/, '');
+async function act(fn) {
+  try { await fn(); }
+  catch (err) { const m = err && err.message ? err.message : err; log(T('錯誤：' + m, 'Error: ' + m), 'err'); }
+}
+function mpState(on) {
+  const t = $('mpTag');
+  put(t, on ? T('MP 測試中', 'MP on') : T('未進入', 'Off'));
+  t.classList.toggle('on', on);
+}
+
+$('mpEnter').onclick = () => act(async () => {
+  await request(AD(0xFF, 0x01), isAd(0xFF));
+  mpState(true);
+  log(T('已進入 MP 測試模式（不會睡眠）', 'MP test mode on (no sleep)'), 'ok');
+});
+$('mpExit').onclick = () => act(async () => {
+  await request(AD(0xFF, 0x02), isAd(0xFF));
+  mpState(false);
+  log(T('已離開 MP 測試模式（做過 RF 測試的話滑鼠會重開機）', 'MP test mode off (after an RF test the mouse reboots)'), 'ok');
+});
+$('mpReset').onclick = () => act(async () => {
+  await request(AD(0xFF, 0x03), isAd(0xFF));
+  mpState(false);
+  log(T('滑鼠重開機中', 'Mouse rebooting'), 'system');
+});
+
+document.querySelectorAll('[data-led]').forEach(b => {
+  b.onclick = () => act(async () => {
+    const [r, g, bl] = b.dataset.led.split(',').map(Number);
+    await request(AD(0x02, 0x00, r, g, bl), isAd(0x02));
+    const name = b.textContent.trim();
+    log(r || g || bl ? T(`滑鼠燈號：${name}`, `Mouse LED: ${name}`) : T('滑鼠燈號測試結束', 'Mouse LED test ended'), 'ok');
+  });
+});
+
+const LAMP = [[T('熄滅', 'Off'), 0], [T('紅', 'Red'), 4], [T('綠', 'Green'), 2], [T('藍', 'Blue'), 1],
+  [T('紫', 'Purple'), 5], [T('青', 'Cyan'), 3], [T('黃', 'Yellow'), 6], [T('白', 'White'), 7]];
+for (const id of ['dlPr', 'dlChg']) LAMP.forEach(([n, v]) => { const o = new Option('', v); put(o, n); $(id).add(o); });
+function dongleLamp(on, pr, chg) {
+  return act(async () => {
+    const b = await request([0x1A, 0xF2, on, pr, chg], r => r[0] === 0x1A && r[1] === 0xF2 && r[2] === on);
+    if (b[5] === 0) log(on ? T('dongle 已點燈（60 秒後自動結束）', 'Dongle lamp on (ends by itself after 60 s)') : T('dongle 已恢復一般燈號', 'Dongle back to its normal lamps'), 'ok');
+    else log(T('dongle 燈號測試被拒絕（這塊板子沒有這顆燈，或韌體不支援）', 'Dongle lamp test refused (the board lacks that lamp, or its firmware does not support it)'), 'err');
+  });
+}
+$('dlLamp').onclick = () => dongleLamp(1, +$('dlPr').value, +$('dlChg').value);
+$('dlLampOff').onclick = () => dongleLamp(0, 0, 0);
+
+function resetKeys() {
+  keyPresses = 0;
+  put($('keyCount'), T('按下 0 次', 'Pressed 0 times'));
+  $('keyLed').classList.remove('down');
+  put($('keyLed'), T('DPI 鍵：等待', 'DPI key: waiting'));
+}
+$('keyClear').onclick = resetKeys;
+
+function rfSend(b3, b4) {
+  return act(async () => {
+    const mode = +$('rfMode').value, ch = +$('rfCh').value, len = +$('rfLen').value, sw = +$('rfSweep').value;
+    const max = mode === 100 ? 38 : 39;
+    if (!(Number.isInteger(ch) && ch >= 0 && ch <= max)) throw Err(T(`頻道要 0～${max}`, `Channel must be 0–${max}`));
+    if (!(len >= 1 && len <= 255) || !(sw >= 0 && sw <= 65535)) throw Err(T('長度 1～255、掃頻 0～65535', 'Length 1–255, sweep 0–65535'));
+    const type = b3 === 2 ? 3 : +$('rfType').value;
+    await request(AD(0x01, b3, b4, mode, +$('rfPow').value, ch, len, type, 0xFF, 0xFF, sw & 0xFF, sw >> 8), isAd(0x01));
+    const what = b3 === 2 ? T('全載波', 'Carrier') : (b4 ? T('接收', 'Receive') : T('發射', 'Transmit'));
+    const m = $('rfMode').selectedOptions[0].text, pw = $('rfPow').value;
+    out('rfOut', T(`${what.zh}已送出（${m}、頻道 ${ch}、${pw} dBm）`, `${what.en} sent (${m}, channel ${ch}, ${pw} dBm)`));
+    log(T(`RF 測試：${what.zh}已送出`, `RF test: ${what.en} sent`), 'ok');
+  });
+}
+$('rfTx').onclick = () => rfSend(1, 0);
+$('rfRx').onclick = () => rfSend(1, 1);
+$('rfCarrier').onclick = () => rfSend(2, 0);
+$('rfCount').onclick = () => act(async () => {
+  const b = await request(AD(0x01, 0x10), isAd(0x01, 0x10));
+  const n = le32(b, 4);
+  out('rfOut', T(`收到 ${nf(n)} 包，測試${b[8] ? '進行中' : '未在跑'}`, `Received ${nf(n)} packets, test ${b[8] ? 'running' : 'not running'}`), !b[8]);
+  log(T(`RF 測試：收到 ${nf(n)} 包，${b[8] ? '進行中' : '未在跑'}`, `RF test: received ${nf(n)} packets, ${b[8] ? 'running' : 'not running'}`));
+});
+$('rfStop').onclick = () => act(async () => {
+  await request(AD(0xFF, 0x02), isAd(0xFF));
+  mpState(false);
+  out('rfOut', T('已停止，滑鼠重開機中（重新連接後再測）', 'Stopped, the mouse is rebooting (reconnect to test again)'));
+  log(T('RF 測試停止：離開 MP 測試，滑鼠重開機', 'RF test stopped: MP test off, the mouse reboots'), 'system');
+});
+
+$('piMac').onclick = () => act(async () => {
+  const b = await request(AD(0x03, 0x01), isAd(0x03, 0x01));
+  out('piOut', 'MAC ' + hexs(b.slice(4), 8));
+  log('MAC ' + hexs(b.slice(4), 8));
+});
+$('piGet').onclick = () => act(async () => {
+  const b = await request(AD(0x03, 0x02), isAd(0x03, 0x02));
+  const p = b.slice(4, 58);
+  $('piCustom').value = h4(le16(p, 0)); $('piVid').value = h4(le16(p, 2)); $('piPid').value = h4(le16(p, 4));
+  $('piSn').value = bytesStr(p.slice(6, 22)); $('piProd').value = bytesStr(p.slice(22, 38)); $('piMfr').value = bytesStr(p.slice(38, 54));
+  piLoaded = true;
+  updateButtons();
+  out('piOut', T('已讀取', 'Read'));
+  const f = id => $(id).value;
+  log(T(`產品資訊：型號 ${f('piCustom')} VID ${f('piVid')} PID ${f('piPid')} SN「${f('piSn')}」產品「${f('piProd')}」製造商「${f('piMfr')}」`,
+    `Product info: model ${f('piCustom')} VID ${f('piVid')} PID ${f('piPid')} SN “${f('piSn')}” product “${f('piProd')}” manufacturer “${f('piMfr')}”`));
+});
+$('piSet').onclick = () => act(async () => {
+  const p = new Uint8Array(54);
+  const n16 = id => { const v = parseInt($(id).value, 16); if (!(v >= 0 && v <= 0xFFFF)) throw Err(T('型號／VID／PID 要 4 位 16 進位', 'Model / VID / PID need 4 hex digits')); return v; };
+  const put16 = (o, v) => { p[o] = v & 0xFF; p[o + 1] = v >> 8; };
+  put16(0, n16('piCustom')); put16(2, n16('piVid')); put16(4, n16('piPid'));
+  p.set(strBytes($('piSn').value, 16), 6); p.set(strBytes($('piProd').value, 16), 22); p.set(strBytes($('piMfr').value, 16), 38);
+  await request(AD(0x03, 0x03, ...p), isAd(0x03, 0x03));
+  log(T('產品資訊已寫入（只儲存，不改 USB 名稱），讀回確認：', 'Product info written (stored only, the USB name does not change); reading it back:'), 'ok');
+  await $('piGet').onclick();
+});
+
+$('paRand').onclick = () => {
+  const ok = v => ![0x00, 0xFF, 0x55, 0xAA].includes(v);
+  const pick = n => { const a = []; while (a.length < n) { const v = crypto.getRandomValues(new Uint8Array(1))[0]; if (ok(v)) a.push(v); } return a; };
+  let a; do { a = pick(5); } while (a[0] === a[1] && a[1] === a[2] && a[2] === a[3]);
+  $('paAddr').value = a.map(h2).join(' ');
+  $('paKey').value = pick(4).map(h2).join(' ');
+};
+$('paSet').onclick = () => act(async () => {
+  const addr = hexBytes($('paAddr').value, 5, T('位址', 'Address')), key = hexBytes($('paKey').value, 4, T('Key', 'Key'));
+  const d = new Array(64).fill(0);
+  d[0] = 0x1A; d[1] = 0xAD; d[2] = 0x05; d[3] = 0x01;
+  d[4] = 0x0F; d[5] = 0x70;                               // device PID 700F
+  d[8] = 0x15; d[9] = 0x19; d[10] = 0x0F; d[11] = 0x70;   // mouse VID / PID
+  addr.forEach((v, i) => { d[12 + i] = v; });
+  key.forEach((v, i) => { d[17 + i] = v; });
+  d[41] = 6;                                              // max rate 8 kHz
+  const b = await request(d, isAd(0x05, 0x01));
+  if (b[4] === 0) log(T(`配對碼已寫入${role === 'dongle' ? ' dongle' : '滑鼠'}（另一邊也要寫同一組）`,
+    `Pairing code written to the ${role === 'dongle' ? 'dongle' : 'mouse'} (write the same one to the other side)`), 'ok');
+  else log(T('配對碼被拒絕（位址不合規則或存檔失敗）', 'Pairing code refused (the address breaks the rules, or saving failed)'), 'err');
+});
+$('paWin').onclick = () => act(async () => {
+  const b = await request(AD(0x05, 0x02), isAd(0x05, 0x02));
+  if (b[4] === 0) log(T('接收器配對視窗已打開 30 秒，請在滑鼠上按配對組合鍵', 'Dongle pairing window open for 30 s; press the pairing key combination on the mouse'), 'ok');
+  else log(T('開配對視窗失敗', 'Opening the pairing window failed'), 'err');
+});
+
+$('rsFactory').onclick = () => act(async () => {
+  if (!await ask({ title: T('恢復出廠設定', 'Factory reset'), note: T('設定和巨集回到預設，保留配對和產品資訊。', 'Settings and macros go back to defaults; pairing and product info stay.'),
+    yes: T('恢復出廠', 'Factory reset') })) return;
+  await request(AD(0xFE, 0x01), isAd(0xFE));
+  log(T('已恢復出廠設定', 'Factory reset done'), 'ok');
+});
+$('rsErase').onclick = () => act(async () => {
+  if (!await ask({ title: T('全部擦除', 'Erase all'), note: T('設定、巨集、配對、產品資訊全部清掉，滑鼠會重開機，之後要重新配對。',
+    'Settings, macros, pairing and product info are all cleared; the mouse reboots and must be paired again.'), yes: T('全部擦除', 'Erase all'), danger: true })) return;
+  await request(AD(0xFE, 0xFF), isAd(0xFE));
+  mpState(false);
+  log(T('全部擦除，滑鼠重開機中', 'Erased all, the mouse is rebooting'), 'system');
+});
+
+$('btnClear').onclick = () => { $('log').textContent = ''; };
+
+// ── Start ───────────────────────────────────────────────────────────────────
+card('dev', 'empty', T('未連接', 'Not connected'),
+  T('滑鼠請用 USB 線連接電腦（藍牙不能更新、不能產測）；dongle 直接插上。', 'Connect the mouse with its USB cable (no update or test over Bluetooth); plug the dongle in.'));
+clearImage(T('連接裝置後，自動選網站上這個裝置的最新韌體。', 'After connecting, the newest firmware for the device is picked from the site.'));
+status(T('尚未連接裝置', 'No device connected'));
+mpState(false);
+resetKeys();
+fillOnline();
+if (!('hid' in navigator)) {
+  $('unsupported').hidden = false;
+  $('btnConnect').disabled = true;
+  status(T('這個瀏覽器不支援 WebHID', 'This browser has no WebHID'), 'error');
+} else {
+  navigator.hid.addEventListener('disconnect', e => {
+    if (dev && e.device === dev && !busy) {
+      dev = null; running = previous = null;
+      card('dev', 'empty', T('未連接', 'Not connected'), T('裝置已拔除（或重開機中）；回來後再按「連接裝置」', 'Device unplugged (or rebooting); press “Connect device” when it is back'));
+      kv('devKv', []);
+      $('headInfo').textContent = '';
+      mpState(false);
+      status(T('裝置已拔除', 'Device unplugged'), 'idle');
+      log(T('裝置已拔除', 'Device unplugged'), 'system');
+      step(1);
+      fillOnline();
+      updateButtons();
+    }
+  });
+  step(1);
+  log(T('就緒：按「連接裝置」，選擇滑鼠（USB 線）或 dongle。', 'Ready: press “Connect device” and pick the mouse (USB cable) or the dongle.'), 'system');
+}
+updateButtons();
+</script>
+</body>
+</html>
