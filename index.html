@@ -412,14 +412,14 @@
             <ul data-l="zh">
               <li>更新時不要拔線、不要關掉這個網頁；先關掉 ap_web、dfu_gui 等同時連著裝置的工具。</li>
               <li>網頁依裝置的產品名稱（GM851 Mouse、Ex02 Mouse、GM855 Mouse、F03 Mouse、K+M Mouse 和各自的 Dongle）只給同一機種的韌體。Ex02 在 0.95 以前、GM855GT 在 0.8 以前、K+M（8M1K）在 0.99 以前的韌體還叫「GM851」，這些板子第一次換到新名稱要用 SWD 或 <code>dfu_hid_update.py … --any-model</code>。</li>
-              <li>線上韌體放在這個網頁旁邊的 <code>firmware/</code>（清單 <code>manifest.json</code>，用 <code>tools/make_dfu_site.py</code> 產生）；直接開本機的 .html 讀不到，只能改用電腦裡的檔案。</li>
+              <li>線上韌體放在這個網頁旁邊的 <code>firmware/</code>（清單 <code>manifest.json</code>，用 <code>tools/make_dfu_site.py</code> 產生）；直接開本機的 .html 時改從 <code>https://gskycraig.github.io/gsky-dfu/</code> 讀取（要能上網）。</li>
               <li>滑鼠更新完會自動確認新版本；新版開不了機時，下次重開會自動退回舊版。</li>
               <li>dongle 沒有「退回上一版」，也不回報映像大小，只檢查版本號。</li>
             </ul>
             <ul data-l="en">
               <li>Do not unplug the cable or close this page during an update; first close ap_web, dfu_gui and any other tool connected to the device.</li>
               <li>The page only offers firmware of the same model, by the device's product name (GM851 Mouse, Ex02 Mouse, GM855 Mouse, F03 Mouse, K+M Mouse and their dongles). Ex02 before 0.95, GM855GT before 0.8 and K+M (8M1K) before 0.99 still call themselves “GM851”; the first update of those boards to the new name needs SWD or <code>dfu_hid_update.py … --any-model</code>.</li>
-              <li>Online firmware sits next to this page in <code>firmware/</code> (list <code>manifest.json</code>, made by <code>tools/make_dfu_site.py</code>); a page opened as a local .html file cannot read it, so use a file on this PC.</li>
+              <li>Online firmware sits next to this page in <code>firmware/</code> (list <code>manifest.json</code>, made by <code>tools/make_dfu_site.py</code>); a page opened as a local .html file reads it from <code>https://gskycraig.github.io/gsky-dfu/</code> instead (needs the internet).</li>
               <li>The mouse confirms the new version by itself after an update; if the new one cannot boot, the next restart goes back to the old one.</li>
               <li>The dongle has no “Roll back” and does not report its image size; only the version number is checked.</li>
             </ul>
@@ -987,7 +987,10 @@ document.addEventListener('drop', e => {
 // Only plain file names in the same folder; size and SHA-256 are checked after the download,
 // the header version against the list, and the product string against the device as for a
 // local file. The device's MCUboot checks the signature in any case.
-const FW_DIR = 'firmware/';
+// Opened as a local file (file://): the list and images come from the public site instead
+// (GitHub Pages sends Access-Control-Allow-Origin: *; user 2026-11-26).
+const FW_SITE = 'https://gskycraig.github.io/gsky-dfu/firmware/';
+const FW_DIR = location.protocol === 'file:' ? FW_SITE : 'firmware/';
 let manifest = [];
 const verKey = v => (String(v).match(/\d+/g) || []).map(Number);
 const verCmp = (a, b) => {
@@ -999,11 +1002,7 @@ function onlineNote(text, bad = false) { const n = $('onlineNote'); put(n, text)
 
 async function loadManifest() {
   onlineNote(T('讀取線上韌體清單中…', 'Reading the online firmware list…'));
-  if (location.protocol === 'file:') {
-    onlineNote(T('這個網頁是從電腦直接開啟的，讀不到線上韌體；請按「改用電腦裡的檔案」。',
-      'This page was opened as a file on this PC and cannot read online firmware; press “Use a file on this PC”.'), true);
-    return;
-  }
+  if (FW_DIR === FW_SITE) log(T(`網頁從電腦直接開啟，線上韌體改從 ${FW_SITE} 讀取`, `Page opened as a local file: online firmware comes from ${FW_SITE}`), 'system');
   try {
     const r = await fetch(FW_DIR + 'manifest.json', { cache: 'no-store' });
     if (!r.ok) throw new Error(`HTTP ${r.status}`);
